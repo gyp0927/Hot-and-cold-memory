@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adaptive RAG - 频率驱动热冷分层系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 1px solid #334155;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .status-online {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+        .status-offline {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .panel {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .panel-title svg {
+            width: 18px;
+            height: 18px;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="file"],
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 14px;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        .btn-secondary {
+            background: #334155;
+            color: #e2e8f0;
+        }
+        .btn-secondary:hover {
+            background: #475569;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        .result-area {
+            min-height: 200px;
+        }
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+            color: #64748b;
+            text-align: center;
+        }
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        .chunk-card {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .chunk-card:hover {
+            border-color: #60a5fa;
+        }
+        .chunk-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .chunk-tier {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .tier-hot {
+            background: rgba(251, 146, 60, 0.15);
+            color: #fb923c;
+            border: 1px solid rgba(251, 146, 60, 0.3);
+        }
+        .tier-cold {
+            background: rgba(96, 165, 250, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+        }
+        .chunk-score {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .chunk-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #cbd5e1;
+            white-space: pre-wrap;
+        }
+        .chunk-meta {
+            display: flex;
+            gap: 16px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #1e293b;
+            font-size: 12px;
+            color: #64748b;
+        }
+        .routing-info {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .info-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        .info-pill .label {
+            color: #64748b;
+        }
+        .info-pill .value {
+            color: #e2e8f0;
+            font-weight: 600;
+        }
+        .strategy-hot { color: #fb923c; }
+        .strategy-cold { color: #60a5fa; }
+        .strategy-both { color: #a78bfa; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #0f172a;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        .progress-fill.hot { background: linear-gradient(90deg, #fb923c, #f97316); }
+        .progress-fill.cold { background: linear-gradient(90deg, #60a5fa, #3b82f6); }
+        .log-entry {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        .log-info { background: rgba(59, 130, 246, 0.1); color: #60a5fa; }
+        .log-success { background: rgba(34, 197, 94, 0.1); color: #4ade80; }
+        .log-error { background: rgba(239, 68, 68, 0.1); color: #f87171; }
+        .log-warn { background: rgba(251, 146, 60, 0.1); color: #fb923c; }
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 4px;
+        }
+        .tab {
+            padding: 8px 16px;
+            font-size: 13px;
+            color: #64748b;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+            border: none;
+            background: none;
+        }
+        .tab:hover { color: #94a3b8; background: #334155; }
+        .tab.active { color: #60a5fa; background: rgba(96, 165, 250, 0.1); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .right-column { display: flex; flex-direction: column; gap: 20px; }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .api-config {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .api-config input {
+            flex: 1;
+            padding: 8px 12px;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            color: #e2e8f0;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Adaptive RAG - 频率驱动热冷分层系统</h1>
+        <div class="api-config">
+            <input type="text" id="apiBase" placeholder="API地址" value="http://localhost:8000">
+            <span id="connStatus" class="status-badge status-offline">
+                <span class="status-dot"></span>
+                <span id="connText">离线</span>
+            </span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="left-column">
+            <!-- 文档上传 -->
+            <div class="panel">
+                <div class="panel-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    文档上传
+                </div>
+                <div class="form-group">
+                    <label>选择文件</label>
+                    <input type="file" id="uploadFile" accept=".txt,.md,.pdf,.docx,.doc,.png,.jpg,.jpeg">
+                </div>
+                <div class="form-group">
+                    <label>或粘贴文本</label>
+                    <textarea id="uploadText" placeholder="在此粘贴文本内容..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>文档标题</label>
+                    <input type="text" id="uploadTitle" placeholder="输入标题">
+                </div>
+                <button class="btn btn-primary" id="uploadBtn" onclick="uploadDocument()">
+                    <span id="uploadSpinner" style="display:none" class="loading"></span>
+                    <span id="uploadTextBtn">上传文档</span>
+                </button>
+            </div>
+
+            <!-- 查询 -->
+            <div class="panel">
+                <div class="panel-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    智能查询
+                </div>
+                <div class="form-group">
+                    <label>查询内容</label>
+                    <input type="text" id="queryInput" placeholder="输入查询..." onkeypress="if(event.key==='Enter')performQuery()">
+                </div>
+                <div class="form-group">
+                    <label>返回数量 (top_k)</label>
+                    <input type="number" id="queryTopK" value="5" min="1" max="20" style="width:100%;padding:10px 14px;background:#0f172a;border:1px solid #475569;border-radius:8px;color:#e2e8f0;">
+                </div>
+                <div class="form-group">
+                    <label>层级偏好</label>
+                    <select id="queryTier">
+                        <option value="">自动路由</option>
+                        <option value="hot">仅热层</option>
+                        <option value="cold">仅冷层</option>
+                        <option value="both">两层都查</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" id="queryBtn" onclick="performQuery()">
+                    <span id="querySpinner" style="display:none" class="loading"></span>
+                    <span id="queryTextBtn">执行查询</span>
+                </button>
+            </div>
+
+            <!-- 系统操作 -->
+            <div class="panel">
+                <div class="panel-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                    </svg>
+                    系统操作
+                </div>
+                <button class="btn btn-secondary" onclick="triggerMigration()" style="margin-bottom:8px;">
+                    <span id="migrateSpinner" style="display:none" class="loading"></span>
+                    手动触发迁移
+                </button>
+                <button class="btn btn-secondary" onclick="clearResults()">清空结果</button>
+            </div>
+        </div>
+
+        <div class="right-column">
+            <!-- 统计面板 -->
+            <div class="panel">
+                <div class="panel-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <line x1="3" y1="9" x2="21" y2="9"/>
+                        <line x1="9" y1="21" x2="9" y2="9"/>
+                    </svg>
+                    系统监控
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statHot">-</div>
+                        <div class="stat-label">热层 Chunk</div>
+                        <div class="progress-bar"><div class="progress-fill hot" id="hotBar" style="width:50%"></div></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statCold">-</div>
+                        <div class="stat-label">冷层 Chunk</div>
+                        <div class="progress-bar"><div class="progress-fill cold" id="coldBar" style="width:50%"></div></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statQuery">0</div>
+                        <div class="stat-label">查询次数</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 结果展示 -->
+            <div class="panel result-area">
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('query')">查询结果</button>
+                    <button class="tab" onclick="switchTab('upload')">上传记录</button>
+                    <button class="tab" onclick="switchTab('log')">系统日志</button>
+                </div>
+
+                <!-- 查询结果 -->
+                <div id="tab-query" class="tab-content active">
+                    <div id="queryResult">
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="11" cy="11" r="8"/>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                            </svg>
+                            <p>在左侧输入查询内容，点击"执行查询"</p>
+                            <p style="font-size:12px;margin-top:8px;">系统将根据话题频率自动路由到热层或冷层</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 上传记录 -->
+                <div id="tab-upload" class="tab-content">
+                    <div id="uploadResult">
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            <p>上传的文档将显示在这里</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 系统日志 -->
+                <div id="tab-log" class="tab-content">
+                    <div id="logResult" style="max-height:400px;overflow-y:auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let queryCount = 0;
+        let uploadCount = 0;
+        const logs = [];
+
+        function getApiBase() {
+            return document.getElementById('apiBase').value.trim() || 'http://localhost:8000';
+        }
+
+        function addLog(level, message) {
+            const time = new Date().toLocaleTimeString();
+            logs.push({ time, level, message });
+            const logEl = document.getElementById('logResult');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${level}`;
+            entry.textContent = `[${time}] ${message}`;
+            logEl.insertBefore(entry, logEl.firstChild);
+        }
+
+        async function checkHealth() {
+            try {
+                const resp = await fetch(`${getApiBase()}/health`, { method: 'GET' });
+                if (resp.ok) {
+                    document.getElementById('connStatus').className = 'status-badge status-online';
+                    document.getElementById('connText').textContent = '在线';
+                    addLog('info', 'API 连接正常');
+                } else {
+                    throw new Error('Status ' + resp.status);
+                }
+            } catch (e) {
+                document.getElementById('connStatus').className = 'status-badge status-offline';
+                document.getElementById('connText').textContent = '离线';
+                addLog('error', 'API 连接失败: ' + e.message);
+            }
+        }
+
+        async function uploadDocument() {
+            const fileInput = document.getElementById('uploadFile');
+            const textInput = document.getElementById('uploadText');
+            const title = document.getElementById('uploadTitle').value || '未命名文档';
+            const btn = document.getElementById('uploadBtn');
+            const spinner = document.getElementById('uploadSpinner');
+            const btnText = document.getElementById('uploadTextBtn');
+
+            let content = '';
+            if (textInput.value.trim()) {
+                content = textInput.value.trim();
+            } else if (fileInput.files.length > 0) {
+                content = await fileInput.files[0].text();
+            } else {
+                addLog('warn', '请先选择文件或输入文本');
+                return;
+            }
+
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+            btnText.textContent = '上传中...';
+
+            try {
+                const blob = new Blob([content], { type: 'text/plain' });
+                const formData = new FormData();
+                formData.append('file', blob, 'document.txt');
+                formData.append('title', title);
+
+                const resp = await fetch(`${getApiBase()}/api/v1/documents/upload`, {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+
+                if (data.status === 'success') {
+                    addLog('success', `文档上传成功: ${title} (${data.chunks_created} chunks)`);
+                    appendUploadResult(data, title);
+                    textInput.value = '';
+                    fileInput.value = '';
+                    document.getElementById('uploadTitle').value = '';
+                } else {
+                    addLog('error', '上传失败: ' + (data.error || '未知错误'));
+                }
+            } catch (e) {
+                addLog('error', '上传异常: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+                btnText.textContent = '上传文档';
+            }
+        }
+
+        function appendUploadResult(data, title) {
+            uploadCount++;
+            const container = document.getElementById('uploadResult');
+            if (uploadCount === 1) container.innerHTML = '';
+
+            const card = document.createElement('div');
+            card.className = 'chunk-card';
+            card.innerHTML = `
+                <div class="chunk-header">
+                    <span style="font-weight:600;color:#e2e8f0;">${title}</span>
+                    <span class="chunk-tier tier-hot">HOT</span>
+                </div>
+                <div class="chunk-meta">
+                    <span>ID: ${data.document_id}</span>
+                    <span>Chunks: ${data.chunks_created}</span>
+                    <span>时间: ${new Date().toLocaleTimeString()}</span>
+                </div>
+            `;
+            container.insertBefore(card, container.firstChild);
+            switchTab('upload');
+        }
+
+        async function performQuery() {
+            const query = document.getElementById('queryInput').value.trim();
+            if (!query) {
+                addLog('warn', '请输入查询内容');
+                return;
+            }
+
+            const topK = parseInt(document.getElementById('queryTopK').value) || 5;
+            const tier = document.getElementById('queryTier').value;
+            const btn = document.getElementById('queryBtn');
+            const spinner = document.getElementById('querySpinner');
+            const btnText = document.getElementById('queryTextBtn');
+
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+            btnText.textContent = '查询中...';
+
+            try {
+                const body = { query, top_k: topK };
+                if (tier) body.tier = tier;
+
+                const startTime = Date.now();
+                const resp = await fetch(`${getApiBase()}/api/v1/query`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await resp.json();
+                const elapsed = Date.now() - startTime;
+
+                if (resp.ok) {
+                    queryCount++;
+                    document.getElementById('statQuery').textContent = queryCount;
+                    addLog('success', `查询完成: "${query}" -> ${data.chunks?.length || 0} 结果`);
+                    renderQueryResult(data, query, elapsed);
+                } else {
+                    addLog('error', '查询失败: ' + (data.detail || '未知错误'));
+                }
+            } catch (e) {
+                addLog('error', '查询异常: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+                btnText.textContent = '执行查询';
+            }
+        }
+
+        function renderQueryResult(data, query, elapsed) {
+            const container = document.getElementById('queryResult');
+            container.innerHTML = '';
+
+            const strategyClass = {
+                'hot_only': 'strategy-hot',
+                'cold_only': 'strategy-cold',
+                'hot_first': 'strategy-hot',
+                'both': 'strategy-both'
+            }[data.routing_strategy] || '';
+
+            const strategyNames = {
+                'hot_only': '热层优先',
+                'cold_only': '冷层优先',
+                'hot_first': '热层优先',
+                'both': '双层查询'
+            };
+
+            const infoHtml = `
+                <div class="routing-info">
+                    <div class="info-pill">
+                        <span class="label">路由策略</span>
+                        <span class="value ${strategyClass}">${strategyNames[data.routing_strategy] || data.routing_strategy}</span>
+                    </div>
+                    <div class="info-pill">
+                        <span class="label">话题频率</span>
+                        <span class="value">${(data.topic_frequency || 0).toFixed(3)}</span>
+                    </div>
+                    <div class="info-pill">
+                        <span class="label">响应时间</span>
+                        <span class="value">${(data.total_latency_ms || elapsed).toFixed(1)}ms</span>
+                    </div>
+                    <div class="info-pill">
+                        <span class="label">热层</span>
+                        <span class="value strategy-hot">${data.hot_results_count || 0}</span>
+                    </div>
+                    <div class="info-pill">
+                        <span class="label">冷层</span>
+                        <span class="value strategy-cold">${data.cold_results_count || 0}</span>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', infoHtml);
+
+            const chunks = data.chunks || [];
+            if (chunks.length === 0) {
+                container.insertAdjacentHTML('beforeend', `
+                    <div class="empty-state" style="padding:40px;">
+                        <p>未找到相关结果</p>
+                        <p style="font-size:12px;margin-top:8px;">尝试上传相关文档后再查询</p>
+                    </div>
+                `);
+                return;
+            }
+
+            chunks.forEach((chunk, idx) => {
+                const tierClass = chunk.tier === 'hot' ? 'tier-hot' : 'tier-cold';
+                const tierName = chunk.tier === 'hot' ? 'HOT' : 'COLD';
+                const decompressedBadge = chunk.is_decompressed ?
+                    '<span style="margin-left:8px;padding:2px 8px;background:rgba(168,85,247,0.15);color:#a855f7;border:1px solid rgba(168,85,247,0.3);border-radius:12px;font-size:11px;">已解压</span>' : '';
+
+                const card = document.createElement('div');
+                card.className = 'chunk-card';
+                card.innerHTML = `
+                    <div class="chunk-header">
+                        <div>
+                            <span class="chunk-tier ${tierClass}">${tierName}</span>
+                            ${decompressedBadge}
+                            <span class="chunk-score" style="margin-left:12px;">#${idx + 1} 相似度: ${(chunk.score || 0).toFixed(4)}</span>
+                        </div>
+                    </div>
+                    <div class="chunk-content">${escapeHtml(chunk.content || '')}</div>
+                    <div class="chunk-meta">
+                        <span>访问: ${chunk.access_count || 0}次</span>
+                        <span>频率: ${(chunk.frequency_score || 0).toFixed(3)}</span>
+                        <span>ID: ${chunk.chunk_id?.slice(0, 8) || 'N/A'}...</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+
+            // Update stats
+            document.getElementById('statHot').textContent = data.hot_results_count || 0;
+            document.getElementById('statCold').textContent = data.cold_results_count || 0;
+            const total = (data.hot_results_count || 0) + (data.cold_results_count || 0);
+            if (total > 0) {
+                document.getElementById('hotBar').style.width = ((data.hot_results_count || 0) / total * 100) + '%';
+                document.getElementById('coldBar').style.width = ((data.cold_results_count || 0) / total * 100) + '%';
+            }
+        }
+
+        async function triggerMigration() {
+            const spinner = document.getElementById('migrateSpinner');
+            spinner.style.display = 'inline-block';
+            try {
+                const resp = await fetch(`${getApiBase()}/api/v1/admin/migrate`, { method: 'POST' });
+                const data = await resp.json();
+                if (data.success) {
+                    addLog('success', `迁移完成: Hot→Cold ${data.hot_to_cold}, Cold→Hot ${data.cold_to_hot}`);
+                } else {
+                    addLog('warn', `迁移完成但有错误: ${data.errors?.length || 0} 个失败`);
+                }
+            } catch (e) {
+                addLog('error', '迁移异常: ' + e.message);
+            } finally {
+                spinner.style.display = 'none';
+            }
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+        }
+
+        function clearResults() {
+            document.getElementById('queryResult').innerHTML = `
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <p>在左侧输入查询内容，点击"执行查询"</p>
+                    <p style="font-size:12px;margin-top:8px;">系统将根据话题频率自动路由到热层或冷层</p>
+                </div>
+            `;
+            document.getElementById('uploadResult').innerHTML = `
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <p>上传的文档将显示在这里</p>
+                </div>
+            `;
+            addLog('info', '结果已清空');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Init
+        addLog('info', '前端页面加载完成');
+        checkHealth();
+        setInterval(checkHealth, 30000);
+    </script>
+</body>
+</html>

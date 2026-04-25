@@ -1,0 +1,82 @@
+version: "3.9"
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.0
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=rag
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=adaptive_rag
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d adaptive_rag"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=adaptive-rag
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - VECTOR_DB_HOST=qdrant
+      - VECTOR_DB_PORT=6333
+      - METADATA_DB_URL=postgresql+asyncpg://rag:rag_password@postgres:5432/adaptive_rag
+      - CACHE_URL=redis://redis:6379/0
+      - DOCUMENT_STORE_TYPE=local
+      - DOCUMENT_STORE_PATH=/app/data/documents
+      - LLM_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - document_store:/app/data/documents
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  qdrant_storage:
+  postgres_data:
+  redis_data:
+  document_store:

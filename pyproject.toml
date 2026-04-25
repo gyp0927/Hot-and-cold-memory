@@ -1,0 +1,96 @@
+[project]
+name = "adaptive-rag"
+version = "0.1.0"
+description = "Frequency-Driven Adaptive RAG Tiered Architecture"
+requires-python = ">=3.11"
+authors = [
+    { name = "Adaptive RAG Team" }
+]
+dependencies = [
+    # API
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.17",
+
+    # Configuration
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+
+    # Vector Database
+    "qdrant-client>=1.12.0",
+
+    # Metadata Database
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+
+    # Cache
+    "redis>=5.2.0",
+
+    # LLM
+    "openai>=1.55.0",
+
+    # Async
+    "httpx>=0.28.0",
+    "aiofiles>=24.1.0",
+
+    # Scheduling
+    "apscheduler>=3.11.0",
+
+    # Monitoring
+    "prometheus-client>=0.21.0",
+    "opentelemetry-api>=1.29.0",
+    "opentelemetry-sdk>=1.29.0",
+    "opentelemetry-instrumentation-fastapi>=0.50b0",
+
+    # Utils
+    "numpy>=2.1.0",
+    "python-json-logger>=2.0.7",
+    "structlog>=24.4.0",
+]
+
+[project.optional-dependencies]
+local = [
+    "sentence-transformers>=3.0.0",
+]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+[project.scripts]
+adaptive-rag = "adaptive_rag.api.main:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["src/adaptive_rag"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
