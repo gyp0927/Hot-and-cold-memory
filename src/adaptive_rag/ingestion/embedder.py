@@ -1,6 +1,8 @@
 """Embedding generation supporting multiple providers."""
 
 import asyncio
+import hashlib
+from collections import OrderedDict
 from typing import Any
 
 import numpy as np
@@ -12,23 +14,85 @@ from adaptive_rag.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+class _LRUCache:
+    """Simple async-safe LRU cache for embedding vectors."""
+
+    def __init__(self, maxsize: int = 2000) -> None:
+        self.maxsize = maxsize
+        self._cache: OrderedDict[str, list[float]] = OrderedDict()
+        self._lock = asyncio.Lock()
+
+    def _key(self, text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    async def get(self, text: str) -> list[float] | None:
+        async with self._lock:
+            key = self._key(text)
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                return list(self._cache[key])
+            return None
+
+    async def set(self, text: str, vector: list[float]) -> None:
+        async with self._lock:
+            key = self._key(text)
+            self._cache[key] = list(vector)
+            self._cache.move_to_end(key)
+            while len(self._cache) > self.maxsize:
+                self._cache.popitem(last=False)
+
+    async def get_batch(self, texts: list[str]) -> tuple[list[int], list[str]]:
+        """Return (cached_indices, missing_texts) for a batch.
+
+        cached_indices maps the original index to the cached vector.
+        """
+        async with self._lock:
+            cached: list[int] = []
+            missing: list[str] = []
+            missing_indices: list[int] = []
+            for i, text in enumerate(texts):
+                key = self._key(text)
+                if key in self._cache:
+                    self._cache.move_to_end(key)
+                    cached.append(i)
+                else:
+                    missing.append(text)
+                    missing_indices.append(i)
+            return cached, missing, missing_indices
+
+    async def set_batch(self, texts: list[str], vectors: list[list[float]]) -> None:
+        async with self._lock:
+            for text, vector in zip(texts, vectors):
+                key = self._key(text)
+                self._cache[key] = list(vector)
+                self._cache.move_to_end(key)
+            while len(self._cache) > self.maxsize:
+                self._cache.popitem(last=False)
+
+
 class Embedder:
     """Embedding generator supporting OpenAI and local models.
 
     Providers:
         - openai: OpenAI API (paid, requires API key)
         - sentence-transformers: Local models (free, runs on CPU/GPU)
+
+    Caches the most recent 2,000 embedding vectors to avoid recomputing
+    identical texts (common during repeated queries or re-ingestion).
     """
 
     def __init__(self) -> None:
         self.settings = get_settings()
         self.provider = self.settings.EMBEDDING_PROVIDER
-        self._batch_size = 100
+        self._batch_size = 256
         self._semaphore = asyncio.Semaphore(10)
 
         # Lazy-loaded clients
         self._openai_client: Any = None
         self._local_model: Any = None
+
+        # Embedding cache
+        self._cache = _LRUCache(maxsize=2000)
 
     def _get_openai_client(self) -> Any:
         """Lazy initialize OpenAI client."""
@@ -61,7 +125,7 @@ class Embedder:
         return self._local_model
 
     async def embed(self, text: str) -> list[float]:
-        """Embed a single text.
+        """Embed a single text (cached).
 
         Args:
             text: Text to embed.
@@ -70,17 +134,23 @@ class Embedder:
             Embedding vector.
         """
         if not text.strip():
-            # Return zero vector for empty text
             dim = self.settings.EMBEDDING_DIMENSION
             return [0.0] * dim
 
+        cached = await self._cache.get(text)
+        if cached is not None:
+            return cached
+
         if self.provider == EmbeddingProvider.OPENAI:
-            return await self._embed_openai(text)
+            vector = await self._embed_openai(text)
         else:
-            return await self._embed_local(text)
+            vector = await self._embed_local(text)
+
+        await self._cache.set(text, vector)
+        return vector
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Embed multiple texts efficiently.
+        """Embed multiple texts efficiently (with cache lookup).
 
         Args:
             texts: List of texts to embed.
@@ -91,25 +161,43 @@ class Embedder:
         if not texts:
             return []
 
-        # Filter out empty texts
-        non_empty = [(i, t) for i, t in enumerate(texts) if t.strip()]
-        if not non_empty:
+        # Handle empty texts first
+        non_empty_indices = [i for i, t in enumerate(texts) if t.strip()]
+        if not non_empty_indices:
             dim = self.settings.EMBEDDING_DIMENSION
             return [[0.0] * dim for _ in texts]
 
-        if self.provider == EmbeddingProvider.OPENAI:
-            embeddings = await self._embed_batch_openai([t for _, t in non_empty])
-        else:
-            embeddings = await self._embed_batch_local([t for _, t in non_empty])
+        non_empty_texts = [texts[i] for i in non_empty_indices]
 
-        # Reconstruct with empty texts as zero vectors
-        result: list[list[float]] = []
-        emb_idx = 0
+        # Cache lookup for non-empty texts
+        cached_indices, missing_texts, missing_orig_indices = await self._cache.get_batch(non_empty_texts)
+
+        # Build result for cached items
+        cached_vectors: dict[int, list[float]] = {}
+        for orig_idx in cached_indices:
+            cached_vectors[non_empty_indices[orig_idx]] = await self._cache.get(non_empty_texts[orig_idx])
+
+        # Compute missing embeddings
+        if missing_texts:
+            if self.provider == EmbeddingProvider.OPENAI:
+                computed = await self._embed_batch_openai(missing_texts)
+            else:
+                computed = await self._embed_batch_local(missing_texts)
+
+            # Store in cache
+            await self._cache.set_batch(missing_texts, computed)
+
+            # Map back to original indices
+            for miss_idx, orig_idx_in_non_empty in enumerate(missing_orig_indices):
+                original_index = non_empty_indices[orig_idx_in_non_empty]
+                cached_vectors[original_index] = computed[miss_idx]
+
+        # Reconstruct full result with empty texts as zero vectors
         dim = self.settings.EMBEDDING_DIMENSION
+        result: list[list[float]] = []
         for i in range(len(texts)):
-            if any(idx == i for idx, _ in non_empty):
-                result.append(embeddings[emb_idx])
-                emb_idx += 1
+            if i in cached_vectors:
+                result.append(cached_vectors[i])
             else:
                 result.append([0.0] * dim)
 
