@@ -834,7 +834,11 @@
                     addLog('success', `文档已删除: ${docId.slice(0, 8)}... (${data.deleted_chunks} chunks)`);
                     card.style.opacity = '0';
                     card.style.transform = 'translateX(20px)';
-                    setTimeout(() => card.remove(), 300);
+                    setTimeout(() => {
+                        card.remove();
+                        // 重新从后端拉取，确保列表和数据库一致
+                        loadDocumentList();
+                    }, 300);
                 } else {
                     throw new Error(data.detail || '删除失败');
                 }

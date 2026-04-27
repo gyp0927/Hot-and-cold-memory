@@ -267,9 +267,10 @@ class IngestionPipeline:
         if cold_ids:
             deleted += await self.cold_tier.delete(cold_ids)
 
-        # 3. Delete document metadata
-        # (PostgresMetadataStore does not have a delete_document method yet,
-        # so we log and move on. Chunks are already gone which is the important part.)
+        # 3. Delete document metadata (critical: without this the document
+        # record lingers and appears as an empty ghost on refresh)
+        await self.metadata_store.delete_document(document_id)
+
         logger.info(
             "document_deleted",
             document_id=str(document_id),

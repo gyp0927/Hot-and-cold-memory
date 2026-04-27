@@ -303,6 +303,17 @@ class PostgresMetadataStore(BaseMetadataStore):
             models = result.scalars().all()
             return [_chunk_to_metadata(m) for m in models]
 
+    async def delete_document(self, document_id: uuid.UUID) -> int:
+        """Delete a document record."""
+        async with self.async_session() as session:
+            result = await session.execute(
+                delete(DocumentModel).where(
+                    DocumentModel.document_id == _to_uuid_str(document_id)
+                )
+            )
+            await session.commit()
+            return result.rowcount or 0
+
     async def create_cluster(self, cluster: QueryCluster) -> None:
         """Create a new query cluster."""
         async with self.async_session() as session:

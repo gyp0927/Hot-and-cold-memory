@@ -174,6 +174,11 @@ class BaseMetadataStore(ABC):
         pass
 
     @abstractmethod
+    async def delete_document(self, document_id: uuid.UUID) -> int:
+        """Delete a document record. Returns count deleted."""
+        pass
+
+    @abstractmethod
     async def query_chunks_by_document(
         self,
         document_id: uuid.UUID,
