@@ -73,13 +73,14 @@ def _extract_text(filename: str, content: bytes) -> str:
         return extract_image(content)
 
     else:
-        # Try UTF-8 text as fallback
+        # Fallback: try to decode as plain text with binary-garbage guard
         try:
-            return content.decode("utf-8")
-        except UnicodeDecodeError:
+            return extract_text_from_bytes(content)
+        except Exception as e:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported file type: {ext}. Supported: .txt, .md, .pdf, .docx, .png, .jpg, .jpeg"
+                detail=f"Unsupported file type or binary content: {ext}. "
+                       f"Supported: .txt, .md, .pdf, .docx, .png, .jpg, .jpeg. ({e})"
             )
 
 

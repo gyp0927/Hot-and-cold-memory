@@ -652,26 +652,30 @@
             const btnText = document.getElementById('uploadTextBtn');
             const progressContainer = document.getElementById('uploadProgressContainer');
 
-            let content = '';
-            if (textInput.value.trim()) {
-                content = textInput.value.trim();
-            } else if (fileInput.files.length > 0) {
-                content = await fileInput.files[0].text();
+            let formData = new FormData();
+            let hasFile = false;
+
+            if (fileInput.files.length > 0) {
+                // 直接传原始 File 对象，保留文件名和 MIME 类型
+                const file = fileInput.files[0];
+                formData.append('file', file, file.name);
+                hasFile = true;
+            } else if (textInput.value.trim()) {
+                const blob = new Blob([textInput.value.trim()], { type: 'text/plain' });
+                formData.append('file', blob, 'document.txt');
+                hasFile = true;
             } else {
                 addLog('warn', '请先选择文件或输入文本');
                 return;
             }
+
+            formData.append('title', title);
 
             btn.disabled = true;
             spinner.style.display = 'inline-block';
             btnText.textContent = '处理中...';
             progressContainer.classList.add('active');
             resetUploadProgress();
-
-            const blob = new Blob([content], { type: 'text/plain' });
-            const formData = new FormData();
-            formData.append('file', blob, 'document.txt');
-            formData.append('title', title);
 
             // 使用 XMLHttpRequest 获取上传进度
             const xhr = new XMLHttpRequest();
