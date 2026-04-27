@@ -457,10 +457,15 @@
                     <label>文档标题</label>
                     <input type="text" id="uploadTitle" placeholder="输入标题">
                 </div>
-                <button class="btn btn-primary" id="uploadBtn" onclick="uploadDocument()">
-                    <span id="uploadSpinner" style="display:none" class="loading"></span>
-                    <span id="uploadTextBtn">上传文档</span>
-                </button>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-primary" id="uploadBtn" onclick="uploadDocument()" style="flex:1;">
+                        <span id="uploadSpinner" style="display:none" class="loading"></span>
+                        <span id="uploadTextBtn">上传文档</span>
+                    </button>
+                    <button class="btn btn-secondary" onclick="testExtract()" style="width:auto;padding:10px 14px;">
+                        🔍 测试提取
+                    </button>
+                </div>
 
                 <!-- 上传进度条 -->
                 <div class="upload-progress-container" id="uploadProgressContainer">
@@ -751,6 +756,34 @@
                 setTimeout(() => {
                     progressContainer.classList.remove('active');
                 }, 1500);
+            }
+        }
+
+        async function testExtract() {
+            const fileInput = document.getElementById('uploadFile');
+            if (fileInput.files.length === 0) {
+                addLog('warn', '请先选择文件');
+                return;
+            }
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file, file.name);
+
+            try {
+                const resp = await fetch(`${getApiBase()}/api/v1/documents/extract-test`, {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+                if (data.error) {
+                    addLog('error', `提取失败: ${data.error}`);
+                } else {
+                    addLog('info', `提取结果: 文件名=${data.filename}, 大小=${data.size}, 文本长度=${data.text_length}, 是否空=${data.is_empty}`);
+                    addLog('info', `文本预览: ${data.text_preview?.substring(0, 200) || '(empty)'}`);
+                    alert(`提取诊断\n文件名: ${data.filename}\n文件大小: ${data.size} bytes\n文本长度: ${data.text_length}\n是否为空: ${data.is_empty}\n\n预览:\n${data.text_preview?.substring(0, 300) || '(empty)'}`);
+                }
+            } catch (e) {
+                addLog('error', '测试提取异常: ' + e.message);
             }
         }
 

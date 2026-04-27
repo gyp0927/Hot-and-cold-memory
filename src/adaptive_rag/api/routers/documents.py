@@ -147,6 +147,28 @@ async def upload_document(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.post("/extract-test")
+async def extract_test(
+    file: UploadFile = File(...),
+) -> dict:
+    """Test text extraction without storing anything."""
+    try:
+        content = await file.read()
+        text = _extract_text(file.filename or "upload", content)
+        return {
+            "filename": file.filename,
+            "size": len(content),
+            "text_length": len(text),
+            "text_preview": text[:500],
+            "is_empty": not text.strip(),
+        }
+    except Exception as e:
+        return {
+            "filename": file.filename,
+            "error": str(e),
+        }
+
+
 @router.post("/text", response_model=DocumentUploadResponse)
 async def upload_text(request: DocumentUploadRequest) -> DocumentUploadResponse:
     """Upload text content directly."""
