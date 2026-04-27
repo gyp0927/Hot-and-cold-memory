@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from adaptive_rag.core.config import get_settings
 from adaptive_rag.core.logging import setup_logging, get_logger
-from adaptive_rag.ingestion.chunker import RecursiveChunker
 from adaptive_rag.ingestion.embedder import Embedder
 from adaptive_rag.ingestion.pipeline import IngestionPipeline
 from adaptive_rag.storage.cache.memory_cache import MemoryCache
@@ -103,7 +102,6 @@ async def initialize_services() -> dict:
         cold_tier=cold_tier,
         embedder=embedder,
         frequency_tracker=frequency_tracker,
-        chunker=RecursiveChunker(),
         migration_engine=migration_engine,
     )
 

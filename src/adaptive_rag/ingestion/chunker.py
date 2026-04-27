@@ -1,5 +1,6 @@
 """Text chunking strategies."""
 
+import asyncio
 import re
 from dataclasses import dataclass
 from typing import Iterator
@@ -8,6 +9,8 @@ import uuid
 from adaptive_rag.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+_CHUNK_DELIMITER = "\n\n---CHUNK_DELIMITER---\n\n"
 
 
 @dataclass
@@ -73,7 +76,7 @@ class RecursiveChunker:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
-    def chunk(
+    async def chunk(
         self,
         text: str,
         document_id: uuid.UUID,
@@ -136,7 +139,7 @@ class FixedSizeChunker:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
-    def chunk(
+    async def chunk(
         self,
         text: str,
         document_id: uuid.UUID,
@@ -166,3 +169,109 @@ class FixedSizeChunker:
             start = end - self.chunk_overlap if end < len(text) else end
 
         return chunks
+
+
+class LLMChunker:
+    """Semantic chunker powered by an LLM.
+
+    Sends the full document to an LLM and asks it to split the text
+    into coherent semantic units (paragraphs grouped by meaning).
+    Much better quality than rule-based chunking for structured docs
+    with headings, lists, and mixed content.
+    """
+
+    _PROMPT_TEMPLATE = """请将以下文本按语义主题进行分段。
+
+要求：
+1. 每个段落围绕一个完整的主题或意思，内容要连贯完整
+2. 不要把标题单独分成一段，标题必须和对应的内容合并在一起
+3. 相近的小主题尽量合并成一个段落，避免过度碎片化
+4. 每个段落长度在 200-800 字之间（中文）
+5. 保持原文的完整性，不要遗漏或修改任何内容
+6. 直接输出分段后的文本，段落之间用以下分隔符隔开：
+
+---CHUNK_DELIMITER---
+
+文本：
+{text}"""
+
+    def __init__(
+        self,
+        llm_client=None,
+        chunk_size: int = 512,
+        chunk_overlap: int = 50,
+    ) -> None:
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self._llm_client = llm_client
+
+    async def chunk(
+        self,
+        text: str,
+        document_id: uuid.UUID,
+        tags: list[str] | None = None,
+    ) -> list[Chunk]:
+        """Chunk text using LLM semantic analysis."""
+        if not text.strip():
+            return []
+
+        # Lazy-init LLM client
+        if self._llm_client is None:
+            from adaptive_rag.core.llm_client import LLMClient
+            self._llm_client = LLMClient()
+
+        prompt = self._PROMPT_TEMPLATE.format(text=text)
+
+        try:
+            raw = await self._llm_client.complete(
+                prompt=prompt,
+                max_tokens=4096,
+                temperature=0.0,
+            )
+        except Exception as e:
+            logger.warning(
+                "llm_chunking_failed",
+                document_id=str(document_id),
+                error=str(e),
+                fallback="recursive",
+            )
+            # Fallback to recursive chunker on LLM failure
+            fallback = RecursiveChunker(
+                chunk_size=self.chunk_size,
+                chunk_overlap=self.chunk_overlap,
+            )
+            return await fallback.chunk(text, document_id, tags)
+
+        # Parse delimited output
+        segments = [s.strip() for s in raw.split(_CHUNK_DELIMITER) if s.strip()]
+
+        # If LLM didn't use delimiter, try paragraph boundaries
+        if len(segments) <= 1:
+            segments = _split_into_paragraphs(raw)
+
+        # Filter out any segments that are just the delimiter or empty
+        segments = [s for s in segments if s and s != "---CHUNK_DELIMITER---"]
+
+        all_chunks: list[Chunk] = []
+        global_char = 0
+
+        for idx, seg_text in enumerate(segments):
+            chunk = Chunk(
+                text=seg_text,
+                chunk_id=uuid.uuid4(),
+                document_id=document_id,
+                index=idx,
+                start_char=global_char,
+                end_char=global_char + len(seg_text),
+                tags=tags or [],
+            )
+            all_chunks.append(chunk)
+            global_char += len(seg_text)
+
+        logger.info(
+            "llm_chunking_complete",
+            document_id=str(document_id),
+            segments=len(segments),
+            chunks=len(all_chunks),
+        )
+        return all_chunks

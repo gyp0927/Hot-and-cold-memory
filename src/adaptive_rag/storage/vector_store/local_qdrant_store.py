@@ -201,34 +201,17 @@ class LocalQdrantStore(BaseVectorStore):
     ) -> list[list[VectorSearchResult]]:
         """Batch search for multiple query vectors.
 
-        Uses Qdrant's search_batch to reduce round-trips.
+        Local-mode QdrantClient does not support search_batch, so we
+        run individual searches concurrently via asyncio.gather.
         Returns one result list per query vector, in the same order.
         """
         if not self.client:
             raise VectorStoreError("Client not initialized")
 
-        from qdrant_client.models import SearchRequest
+        if not query_vectors:
+            return []
 
-        requests = [
-            SearchRequest(vector=qv, limit=limit, with_payload=True)
-            for qv in query_vectors
-        ]
-
-        batch_results = await asyncio.to_thread(
-            self.client.search_batch,
-            collection_name=collection,
-            requests=requests,
+        results = await asyncio.gather(
+            *[self.search(collection, qv, limit=limit) for qv in query_vectors]
         )
-
-        results: list[list[VectorSearchResult]] = []
-        for search_result_list in batch_results:
-            per_query: list[VectorSearchResult] = []
-            for r in search_result_list:
-                per_query.append(VectorSearchResult(
-                    chunk_id=uuid.UUID(r.id) if isinstance(r.id, str) else uuid.UUID(int=r.id),
-                    score=r.score,
-                    vector=None,
-                    payload=r.payload or {},
-                ))
-            results.append(per_query)
-        return results
+        return list(results)

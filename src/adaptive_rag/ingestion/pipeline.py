@@ -23,7 +23,7 @@ from adaptive_rag.storage.vector_store.base import BaseVectorStore
 from adaptive_rag.tiers.cold_tier import ColdTier
 from adaptive_rag.tiers.hot_tier import HotTier
 
-from .chunker import RecursiveChunker
+from .chunker import LLMChunker, RecursiveChunker
 from .embedder import Embedder
 from .extractors.text import extract_text
 
@@ -69,7 +69,7 @@ class IngestionPipeline:
         cold_tier: ColdTier,
         embedder: Embedder,
         frequency_tracker: FrequencyTracker,
-        chunker: RecursiveChunker | None = None,
+        chunker: RecursiveChunker | LLMChunker | None = None,
         migration_engine=None,
     ) -> None:
         self.settings = get_settings()
@@ -78,10 +78,19 @@ class IngestionPipeline:
         self.cold_tier = cold_tier
         self.embedder = embedder
         self.frequency_tracker = frequency_tracker
-        self.chunker = chunker or RecursiveChunker(
-            chunk_size=512,
-            chunk_overlap=50,
-        )
+
+        if chunker is not None:
+            self.chunker = chunker
+        elif self.settings.CHUNK_STRATEGY.value == "llm":
+            self.chunker = LLMChunker(
+                chunk_size=self.settings.CHUNK_SIZE,
+                chunk_overlap=self.settings.CHUNK_OVERLAP,
+            )
+        else:
+            self.chunker = RecursiveChunker(
+                chunk_size=self.settings.CHUNK_SIZE,
+                chunk_overlap=self.settings.CHUNK_OVERLAP,
+            )
         self.migration_engine = migration_engine
 
     async def ingest_text(
@@ -124,7 +133,7 @@ class IngestionPipeline:
             await self.metadata_store.create_document(doc_meta)
 
             # 3. Chunk the document
-            chunks = self.chunker.chunk(
+            chunks = await self.chunker.chunk(
                 text=text,
                 document_id=document_id,
                 tags=tags or [],

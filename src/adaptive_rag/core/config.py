@@ -35,6 +35,13 @@ class RoutingStrategy(str, Enum):
     BOTH = "both"
 
 
+class ChunkStrategy(str, Enum):
+    """Text chunking strategies."""
+
+    RECURSIVE = "recursive"
+    LLM = "llm"
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -92,6 +99,11 @@ class Settings(BaseSettings):
     DECAY_HALF_LIFE_HOURS: float = 24.0
     QUERY_CLUSTERING_THRESHOLD: float = 0.85
     MIN_CLUSTER_SIZE: int = 3
+
+    # Chunking
+    CHUNK_STRATEGY: ChunkStrategy = ChunkStrategy.RECURSIVE
+    CHUNK_SIZE: int = 512
+    CHUNK_OVERLAP: int = 50
 
     # Compression
     COMPRESSION_MODEL: str = "gpt-4o-mini"
