@@ -156,12 +156,30 @@ class BaseMetadataStore(ABC):
         pass
 
     @abstractmethod
+    async def list_documents(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[DocumentMetadata]:
+        """List documents with pagination."""
+        pass
+
+    @abstractmethod
     async def update_document(
         self,
         document_id: uuid.UUID,
         updates: dict[str, Any],
     ) -> DocumentMetadata | None:
         """Update document fields."""
+        pass
+
+    @abstractmethod
+    async def query_chunks_by_document(
+        self,
+        document_id: uuid.UUID,
+        limit: int = 1000,
+    ) -> list[ChunkMetadata]:
+        """Get all chunks belonging to a document."""
         pass
 
     # Query cluster operations

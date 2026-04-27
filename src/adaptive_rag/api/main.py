@@ -134,6 +134,7 @@ async def lifespan(app: FastAPI):
     # Wire up routers
     query.set_retriever(_services["retriever"])
     documents.set_pipeline(_services["pipeline"])
+    documents.set_stores(_services["metadata_store"], _services["document_store"])
     admin.set_migration_engine(_services["migration_engine"])
 
     logger.info("services_initialized")

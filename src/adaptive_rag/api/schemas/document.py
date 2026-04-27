@@ -25,8 +25,8 @@ class DocumentUploadResponse(BaseModel):
     message: str
 
 
-class DocumentResponse(BaseModel):
-    """Document metadata response."""
+class DocumentListItem(BaseModel):
+    """Document list item."""
 
     document_id: uuid.UUID
     source_type: str
@@ -34,3 +34,35 @@ class DocumentResponse(BaseModel):
     title: str | None = None
     total_chunks: int
     created_at: str
+
+
+class DocumentListResponse(BaseModel):
+    """Document list response."""
+
+    documents: list[DocumentListItem]
+    total: int
+
+
+class ChunkContent(BaseModel):
+    """Chunk with its content."""
+
+    chunk_id: uuid.UUID
+    chunk_index: int
+    tier: str
+    frequency_score: float
+    access_count: int
+    content: str
+
+
+class DocumentDetailResponse(BaseModel):
+    """Document detail with chunks."""
+
+    document_id: uuid.UUID
+    source_type: str
+    source_uri: str
+    title: str | None = None
+    content_hash: str
+    total_chunks: int
+    created_at: str
+    updated_at: str
+    chunks: list[ChunkContent]

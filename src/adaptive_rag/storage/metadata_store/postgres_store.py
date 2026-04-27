@@ -271,6 +271,38 @@ class PostgresMetadataStore(BaseMetadataStore):
             model = result.scalar_one_or_none()
             return _document_to_metadata(model) if model else None
 
+    async def list_documents(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[DocumentMetadata]:
+        """List documents with pagination."""
+        async with self.async_session() as session:
+            result = await session.execute(
+                select(DocumentModel)
+                .order_by(DocumentModel.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            models = result.scalars().all()
+            return [_document_to_metadata(m) for m in models]
+
+    async def query_chunks_by_document(
+        self,
+        document_id: uuid.UUID,
+        limit: int = 1000,
+    ) -> list[ChunkMetadata]:
+        """Get all chunks belonging to a document."""
+        async with self.async_session() as session:
+            result = await session.execute(
+                select(ChunkModel)
+                .where(ChunkModel.document_id == _to_uuid_str(document_id))
+                .order_by(ChunkModel.chunk_index)
+                .limit(limit)
+            )
+            models = result.scalars().all()
+            return [_chunk_to_metadata(m) for m in models]
+
     async def create_cluster(self, cluster: QueryCluster) -> None:
         """Create a new query cluster."""
         async with self.async_session() as session:
