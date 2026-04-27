@@ -99,7 +99,18 @@ async def upload_document(
 
     try:
         content = await file.read()
+        logger.info(
+            "upload_received",
+            filename=file.filename,
+            size=len(content),
+        )
         text = _extract_text(file.filename or "upload", content)
+        logger.info(
+            "upload_extracted",
+            filename=file.filename,
+            text_len=len(text),
+            preview=text[:200].replace("\n", " "),
+        )
 
         if not text.strip():
             raise HTTPException(status_code=400, detail="No text content extracted from file")
@@ -111,6 +122,15 @@ async def upload_document(
             source_uri=file.filename or "upload",
             title=title or file.filename,
             tags=tag_list,
+        )
+        logger.info(
+            "upload_result",
+            filename=file.filename,
+            status=result.status,
+            chunks=result.chunks_created,
+            hot=result.hot_chunks,
+            cold=result.cold_chunks,
+            error=result.error,
         )
 
         return DocumentUploadResponse(

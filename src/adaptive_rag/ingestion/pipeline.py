@@ -130,6 +130,19 @@ class IngestionPipeline:
                 tags=tags or [],
             )
 
+            if len(chunks) == 0:
+                logger.error(
+                    "ingestion_zero_chunks",
+                    document_id=str(document_id),
+                    text_len=len(text),
+                    source_uri=source_uri,
+                )
+                return IngestionResult(
+                    document_id=document_id,
+                    status="failed",
+                    error="Document produced zero chunks (text may be empty or unchunkable)",
+                )
+
             # 4. Generate embeddings
             texts = [c.text for c in chunks]
             embeddings = await self.embedder.embed_batch(texts)
