@@ -129,6 +129,13 @@ class IngestionPipeline:
                 document_id=document_id,
                 tags=tags or [],
             )
+            logger.info(
+                "ingestion_chunked",
+                document_id=str(document_id),
+                chunk_count=len(chunks),
+                text_len=len(text),
+                previews=[c.text[:80] for c in chunks[:3]],
+            )
 
             if len(chunks) == 0:
                 logger.error(
@@ -146,11 +153,20 @@ class IngestionPipeline:
             # 4. Generate embeddings
             texts = [c.text for c in chunks]
             embeddings = await self.embedder.embed_batch(texts)
+            logger.info(
+                "ingestion_embedded",
+                document_id=str(document_id),
+                embeddings=len(embeddings),
+            )
 
             # 5. Classify each chunk by historical topic frequency and route
-            # Batch: N vector-store round-trips -> 1 search_batch request
             topic_freqs = await self.frequency_tracker.get_topic_frequencies_batch(
                 embeddings
+            )
+            logger.info(
+                "ingestion_frequencies",
+                document_id=str(document_id),
+                freqs=[round(f, 3) for f in topic_freqs],
             )
 
             hot_chunks: list[Chunk] = []
@@ -166,13 +182,24 @@ class IngestionPipeline:
                     cold_chunks.append(chunk)
                     cold_embeddings.append(embedding)
 
+            logger.info(
+                "ingestion_routing",
+                document_id=str(document_id),
+                hot=len(hot_chunks),
+                cold=len(cold_chunks),
+            )
+
             # 6. Store hot chunks
             if hot_chunks:
-                await self.hot_tier.store_chunks(
+                hot_meta = await self.hot_tier.store_chunks(
                     chunks=hot_chunks,
                     embeddings=hot_embeddings,
                 )
-                # Override starting score for new chunks that are already hot topics
+                logger.info(
+                    "ingestion_hot_stored",
+                    document_id=str(document_id),
+                    stored=len(hot_meta),
+                )
                 await asyncio.gather(*[
                     self.metadata_store.update_chunk(
                         chunk_id=chunk.chunk_id,
@@ -183,10 +210,15 @@ class IngestionPipeline:
 
             # 7. Store cold chunks as raw (skip LLM compression)
             if cold_chunks:
-                await self.cold_tier.store_raw_chunks(
+                cold_meta = await self.cold_tier.store_raw_chunks(
                     chunks=cold_chunks,
                     embeddings=cold_embeddings,
                     initial_score=0.1,
+                )
+                logger.info(
+                    "ingestion_cold_stored",
+                    document_id=str(document_id),
+                    stored=len(cold_meta),
                 )
 
             # 8. Update document with chunk count
@@ -195,7 +227,7 @@ class IngestionPipeline:
                 updates={"total_chunks": len(chunks)},
             )
 
-            # 9. Hot tier capacity check — evict coldest % if over limit
+            # 9. Hot tier capacity check
             await self._enforce_hot_tier_capacity()
 
             elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
