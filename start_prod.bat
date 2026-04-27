@@ -24,6 +24,6 @@ echo 文档: http://localhost:8000/docs
 echo.
 
 REM 生产模式：无重载、单 worker、INFO 日志级别
-python -m uvicorn adaptive_rag.api.main:app --host 0.0.0.0 --port 8000 --no-access-log --log-level info
+python -m uvicorn adaptive_rag.api.main:app --host 127.0.0.1 --port 8000 --no-access-log --log-level info
 
 pause
