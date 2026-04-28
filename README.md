@@ -1,160 +1,255 @@
-# Adaptive Memory - Agent Memory System with Frequency-Driven Tiered Storage
+# Adaptive Memory
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=flat-square&logo=python" />
-  <img src="https://img.shields.io/badge/FastAPI-0.115%2B-green?style=flat-square&logo=fastapi" />
-  <img src="https://img.shields.io/badge/Qdrant-VectorDB-orange?style=flat-square" />
-  <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" />
+  <b>Agent Memory System with Frequency-Driven Hot/Cold Tiering</b>
 </p>
 
 <p align="center">
-  <b>Adaptive Agent Memory with Frequency-Driven Hot/Cold Tiering</b>
+  <a href="https://www.python.org/downloads/release/python-3110/">
+    <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
+  </a>
+  <a href="https://fastapi.tiangolo.com/">
+    <img src="https://img.shields.io/badge/FastAPI-0.115%2B-green" alt="FastAPI">
+  </a>
+  <a href="https://qdrant.tech/">
+    <img src="https://img.shields.io/badge/Qdrant-VectorDB-orange" alt="Qdrant">
+  </a>
+  <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License">
 </p>
 
-> 将操作系统的"热数据/冷数据"分层概念引入 Agent 记忆系统。高频记忆保持原文快速检索，低频记忆经 LLM 压缩为摘要节省存储，记忆根据访问频率自动在两层之间迁移。
-
 ---
 
-## 核心特性
+## What is this?
 
-- **热冷分层记忆**
-  - **Short-term (Hot)**：高频记忆保持原文存储，低延迟检索 (< 100ms)
-  - **Long-term (Cold)**：低频记忆经 LLM 压缩为摘要，节省 60%~80% 存储
+A memory system for AI agents. Like human memory, it has **short-term** (hot) and **long-term** (cold) storage:
 
-- **记忆类型支持**
-  - `observation` — 观察（Agent 感知到的信息）
-  - `fact` — 事实（确定的知识）
-  - `reflection` — 反思（Agent 的推理和总结）
-  - `summary` — 摘要（压缩后的长期记忆）
+- **Short-term** keeps full text for fast recall
+- **Long-term** compresses old memories to save space
+- Memories automatically move between layers based on how often they're accessed
 
-- **频率驱动路由**
-  - 根据话题频率自动决定检索策略：Hot Only / Cold Only / Both
-  - 累计访问次数达到阈值也进入 Hot（不依赖分数衰减）
+## Why not just use a vector database?
 
-- **智能记忆巩固**
-  - 低频 Hot 记忆自动压缩迁移到 Cold（长期记忆）
-  - 高频 Cold 记忆自动解压提升回 Hot（短期记忆）
+| Plain Vector DB | Adaptive Memory |
+|----------------|-----------------|
+| Everything stored the same way | Hot memories fast, cold memories compressed |
+| No concept of "forgetting" | Old unused memories naturally fade |
+| Linear scaling cost | Compression saves 60-80% storage |
+| No access history | Frequency tracking enables smart routing |
 
-- **语义聚类**
-  - 相似查询自动归为一类话题
-  - 话题级别频率追踪，而非单条记忆
-
----
-
-## 快速开始
-
-### 1. 安装依赖
+## Quick Start
 
 ```bash
+# 1. Install
 pip install -e ".[dev]"
-```
 
-### 2. 配置环境变量
-
-复制 `.env.example` 为 `.env`，填入你的 OpenAI API Key：
-
-```bash
+# 2. Configure
 cp .env.example .env
-# 编辑 .env，设置 LLM_API_KEY
-```
+# Edit .env and add your OpenAI API key
 
-### 3. 启动服务
-
-```bash
+# 3. Start
 python -m adaptive_memory.api.main
 ```
 
-服务启动在 `http://localhost:8000`
+Service runs at `http://localhost:8000`
 
----
+## API Usage
 
-## API 使用
-
-### 写入记忆
+### Write a memory
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/memories \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "用户喜欢Python编程语言",
+    "content": "User prefers Python over JavaScript",
     "memory_type": "fact",
-    "source": "conversation_123",
-    "importance": 0.8,
-    "tags": ["user_preference", "programming"]
+    "source": "conversation_001",
+    "importance": 0.8
   }'
 ```
 
-### 检索记忆
+**Response:**
+```json
+{
+  "memory_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "success",
+  "tier": "hot"
+}
+```
+
+### Retrieve relevant memories
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/retrieve \
   -H "Content-Type: application/json" \
-  -d '{
-    "query": "用户喜欢什么编程语言？",
-    "top_k": 5
-  }'
+  -d '{"query": "What language does the user like?", "top_k": 5}'
 ```
 
-### 列出记忆
+**Response:**
+```json
+{
+  "memories": [
+    {
+      "memory_id": "550e8400-e29b-41d4-a716-446655440000",
+      "content": "User prefers Python over JavaScript",
+      "score": 0.92,
+      "tier": "hot",
+      "memory_type": "fact"
+    }
+  ],
+  "routing_strategy": "hot_only",
+  "total_latency_ms": 45.2
+}
+```
+
+### List memories
 
 ```bash
-curl "http://localhost:8000/api/v1/memories?memory_type=fact&limit=10"
+# All facts
+curl "http://localhost:8000/api/v1/memories?memory_type=fact&limit=20"
+
+# From a specific conversation
+curl "http://localhost:8000/api/v1/memories?source=conversation_001"
 ```
 
----
-
-## 架构
+## How It Works
 
 ```
-Agent 调用
-    │
-    ▼
-POST /memories  ──→  MemoryPipeline  ──→  Embedding
-    │                                         │
-    │                                         ▼
-    │                              Frequency Tracker (话题频率)
-    │                                         │
-    │                              Hot? ──→  Short-term Memory (完整原文)
-    │                              Cold? ──→  Long-term Memory (压缩摘要)
-    │
-    ▼
-POST /retrieve  ──→  UnifiedRetriever  ──→  FrequencyRouter
-    │                                         │
-    │                              HOT_ONLY / COLD_ONLY / BOTH
-    │                                         │
-    │                              Hot Tier + Cold Tier 并行检索
-    │                                         │
-    │                              ResultRanker 合并排序
-    │                                         │
-    ▼                              返回相关记忆列表
-  记忆结果
+Agent writes memory
+        |
+        v
++-------------------+     +------------------+
+|  Frequency Check  |---->|   Short-term     |
+|  (hot topic?)     |     |   (Hot Tier)     |
++-------------------+     |  Full text       |
+        | no              |  < 100ms recall  |
+        v                 +------------------+
++-------------------+              |
+|   Long-term       |<-------------+
+|   (Cold Tier)     |   Auto-migration
+|   Compressed      |   by frequency
++-------------------+
+        ^
+        |
+Agent queries memory
+        |
+        v
++-------------------+     +------------------+
+|  Router decides   |---->|  Query Hot Only  |
+|  HOT / COLD / BOTH|     |  (freq >= 0.7)   |
++-------------------+     +------------------+
+                                   |
+                          +------------------+
+                          | Query Both Tiers |
+                          | (0.25 < freq)    |
+                          +------------------+
+                                   |
+                          +------------------+
+                          | Query Cold Only  |
+                          | (freq <= 0.25)   |
+                          +------------------+
 ```
 
----
+### Memory lifecycle
 
-## 关键配置
+| Stage | Storage | Latency | Trigger |
+|-------|---------|---------|---------|
+| New / Hot | Full text + embedding | < 100ms | Frequency >= 0.7 or 50+ accesses |
+| Cooling | Same | Same | No access for 3+ days |
+| Cold | LLM-compressed summary | ~200ms | Frequency drops below 0.25 |
+| Forgotten | Still stored but rarely queried | - | Only accessed if explicitly searched |
 
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `DECAY_HALF_LIFE_HOURS` | 72 | 记忆分数半衰期（小时） |
-| `HOT_ACCESS_COUNT_THRESHOLD` | 50 | 累计访问次数达到此值进入 Hot |
-| `HOT_TO_COLD_THRESHOLD` | 0.25 | 分数低于此值从 Hot 降到 Cold |
-| `COLD_TO_HOT_THRESHOLD` | 0.7 | 分数高于此值从 Cold 升到 Hot |
-| `HOT_TIER_CAPACITY` | 10000 | Hot 层最大记忆数 |
+### Decay curve
 
----
+Default half-life: **72 hours**
 
-## 技术栈
+| Time since last access | Remaining score |
+|------------------------|-----------------|
+| 0h | 100% |
+| 24h | 79% |
+| 48h | 63% |
+| 72h | 50% |
+| 1 week | 31% |
 
-- **API**: FastAPI + Uvicorn
-- **向量数据库**: Qdrant
-- **元数据数据库**: PostgreSQL / SQLite (async SQLAlchemy)
-- **缓存**: Redis / 内存 LRU
-- **嵌入**: OpenAI / sentence-transformers
-- **LLM**: OpenAI API (压缩摘要)
-- **监控**: Prometheus
+But with **minimum score protection** (`log(access_count) / 6`), a memory with 50 historical accesses can never drop below 0.65 regardless of decay.
 
----
+## Memory Types
+
+| Type | Use case | Example |
+|------|----------|---------|
+| `observation` | Something the agent noticed | "User closed the tab without saving" |
+| `fact` | Factual knowledge about user | "User prefers Python over JavaScript" |
+| `reflection` | Agent's own reasoning | "User seems frustrated when responses are too verbose" |
+| `summary` | Condensed from multiple memories | "User is a backend engineer who likes clean code" |
+
+## Configuration
+
+Key settings in `.env`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DECAY_HALF_LIFE_HOURS` | 72 | How fast memories fade without access |
+| `HOT_ACCESS_COUNT_THRESHOLD` | 50 | Cumulative accesses to force hot tier |
+| `HOT_TO_COLD_THRESHOLD` | 0.25 | Score below which memories migrate to cold |
+| `COLD_TO_HOT_THRESHOLD` | 0.7 | Score above which memories promote to hot |
+| `HOT_TIER_CAPACITY` | 10000 | Max short-term memories before eviction |
+| `COMPRESSION_MODEL` | gpt-4o-mini | LLM for summarizing cold memories |
+
+## Architecture
+
+```
+┌─────────────────────────────────────────┐
+│           Agent (your code)             │
+└─────────────────┬───────────────────────┘
+                  │ HTTP
+    ┌─────────────┼─────────────┐
+    ▼             ▼             ▼
+┌────────┐  ┌──────────┐  ┌──────────┐
+│ POST   │  │  POST    │  │   GET    │
+│/memories│  │/retrieve │  │ /memories│
+└────┬───┘  └────┬─────┘  └────┬─────┘
+     │           │             │
+     ▼           ▼             ▼
+┌─────────────────────────────────────────┐
+│         MemoryPipeline                  │
+│  - Generate embedding                   │
+│  - Check topic frequency                │
+│  - Route to Hot or Cold tier            │
+└─────────────────────────────────────────┘
+     │                           │
+     ▼                           ▼
+┌──────────┐            ┌──────────────┐
+│ Hot Tier │            │  Cold Tier   │
+│(Qdrant + │            │(Qdrant +     │
+│  local   │            │  local store)│
+│  store)  │            │              │
+│          │            │  LLM-compressed
+│ Full text│            │  summaries   │
+│ < 100ms  │            │ ~200ms       │
+└──────────┘            └──────────────┘
+     │                           │
+     └───────────┬───────────────┘
+                 ▼
+        ┌─────────────┐
+        │  PostgreSQL │
+        │  (metadata) │
+        └─────────────┘
+```
+
+## Tech Stack
+
+- **API**: FastAPI, Uvicorn
+- **Vector DB**: Qdrant (local or server)
+- **Metadata DB**: PostgreSQL via async SQLAlchemy (SQLite works too)
+- **Cache**: Redis or in-memory LRU
+- **Embeddings**: OpenAI or sentence-transformers
+- **Compression**: OpenAI API (gpt-4o-mini)
+- **Monitoring**: Prometheus metrics
+
+## Running Tests
+
+```bash
+pytest -q
+```
 
 ## License
 
