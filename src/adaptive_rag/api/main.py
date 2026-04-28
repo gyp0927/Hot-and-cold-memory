@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import make_asgi_app
 
 from adaptive_rag.core.config import get_settings
 from adaptive_rag.core.logging import setup_logging, get_logger
@@ -192,6 +193,10 @@ def create_app() -> FastAPI:
     app.include_router(documents.router, prefix="/api/v1")
     app.include_router(admin.router, prefix="/api/v1")
     app.include_router(health.router)
+
+    # Prometheus metrics endpoint
+    metrics_app = make_asgi_app()
+    app.mount("/metrics", metrics_app)
 
     # Static files
     static_dir = os.path.join(os.path.dirname(__file__), "static")

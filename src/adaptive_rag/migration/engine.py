@@ -9,6 +9,7 @@ import uuid
 from adaptive_rag.core.config import Tier, get_settings
 from adaptive_rag.core.exceptions import MigrationError, ChunkNotFoundError
 from adaptive_rag.core.logging import get_logger
+from adaptive_rag.monitoring.metrics import MIGRATION_TOTAL, MIGRATION_DURATION
 from adaptive_rag.ingestion.chunker import Chunk
 from adaptive_rag.ingestion.embedder import Embedder
 from adaptive_rag.storage.metadata_store.base import (
@@ -111,6 +112,9 @@ class MigrationEngine:
         Returns:
             Migration report.
         """
+        import time
+        start_time = time.time()
+
         report = MigrationReport(
             started_at=datetime.utcnow(),
         )
@@ -165,6 +169,12 @@ class MigrationEngine:
 
         report.completed_at = datetime.utcnow()
         report.total_processed = len(report.hot_to_cold) + len(report.cold_to_hot)
+
+        # Prometheus metrics
+        duration = time.time() - start_time
+        MIGRATION_DURATION.observe(duration)
+        MIGRATION_TOTAL.labels(direction="hot_to_cold", status="success").inc(len(report.hot_to_cold))
+        MIGRATION_TOTAL.labels(direction="cold_to_hot", status="success").inc(len(report.cold_to_hot))
 
         logger.info(
             "migration_cycle_complete",

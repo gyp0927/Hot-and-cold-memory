@@ -13,6 +13,7 @@ from adaptive_rag.ingestion.embedder import Embedder
 from adaptive_rag.tiers.base import RetrievedChunk
 from adaptive_rag.tiers.hot_tier import HotTier
 from adaptive_rag.tiers.cold_tier import ColdTier
+from adaptive_rag.monitoring.metrics import QUERY_TOTAL, QUERY_DURATION
 
 from .ranker import ResultRanker
 
@@ -171,6 +172,10 @@ class FrequencyRouter:
         _background_tasks.add(task)
 
         elapsed_ms = (time.time() - start_time) * 1000
+
+        # Prometheus metrics
+        QUERY_TOTAL.labels(tier=strategy.value, status="success").inc()
+        QUERY_DURATION.labels(tier=strategy.value).observe(elapsed_ms / 1000.0)
 
         logger.info(
             "query_routed",

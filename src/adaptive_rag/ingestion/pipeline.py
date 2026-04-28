@@ -12,6 +12,7 @@ from adaptive_rag.core.config import Tier, get_settings
 from adaptive_rag.core.exceptions import IngestionError
 from adaptive_rag.core.logging import get_logger
 from adaptive_rag.frequency.tracker import FrequencyTracker
+from adaptive_rag.monitoring.metrics import CHUNKS_TOTAL
 from adaptive_rag.ingestion.chunker import Chunk
 from adaptive_rag.storage.document_store.base import BaseDocumentStore
 from adaptive_rag.storage.metadata_store.base import (
@@ -255,6 +256,12 @@ class IngestionPipeline:
             await self._enforce_hot_tier_capacity()
 
             elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+
+            # Update Prometheus gauges
+            hot_total = await self.metadata_store.count_chunks_by_tier(Tier.HOT)
+            cold_total = await self.metadata_store.count_chunks_by_tier(Tier.COLD)
+            CHUNKS_TOTAL.labels(tier="hot").set(hot_total)
+            CHUNKS_TOTAL.labels(tier="cold").set(cold_total)
 
             logger.info(
                 "ingestion_complete",

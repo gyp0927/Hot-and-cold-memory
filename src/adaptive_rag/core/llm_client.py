@@ -7,6 +7,7 @@ import httpx
 
 from adaptive_rag.core.config import get_settings
 from adaptive_rag.core.logging import get_logger
+from adaptive_rag.monitoring.metrics import LLM_REQUESTS_TOTAL, LLM_REQUEST_DURATION
 
 logger = get_logger(__name__)
 
@@ -82,10 +83,20 @@ class LLMClient:
         max_tokens = max_tokens or self.settings.COMPRESSION_MAX_TOKENS
         temperature = temperature if temperature is not None else self.settings.LLM_TEMPERATURE
 
-        if self.is_anthropic_format():
-            return await self._complete_anthropic(prompt, model, max_tokens, temperature)
-        else:
-            return await self._complete_openai(prompt, model, max_tokens, temperature, response_format)
+        import time
+        start = time.time()
+        try:
+            if self.is_anthropic_format():
+                result = await self._complete_anthropic(prompt, model, max_tokens, temperature)
+            else:
+                result = await self._complete_openai(prompt, model, max_tokens, temperature, response_format)
+            LLM_REQUESTS_TOTAL.labels(operation="completion").inc()
+            LLM_REQUEST_DURATION.labels(operation="completion").observe(time.time() - start)
+            return result
+        except Exception:
+            LLM_REQUESTS_TOTAL.labels(operation="completion").inc()
+            LLM_REQUEST_DURATION.labels(operation="completion").observe(time.time() - start)
+            raise
 
     async def _complete_openai(
         self,

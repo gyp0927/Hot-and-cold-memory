@@ -170,6 +170,49 @@ class QdrantVectorStore(BaseVectorStore):
         result = await self.client.count(collection_name=collection)
         return result.count
 
+    async def search_batch(
+        self,
+        collection: str,
+        query_vectors: list[list[float]],
+        limit: int = 1,
+    ) -> list[list[VectorSearchResult]]:
+        """Batch search for multiple query vectors.
+
+        Uses Qdrant's native search_batch API for efficient multi-query search.
+        """
+        if not self.client:
+            raise VectorStoreError("Client not initialized")
+
+        if not query_vectors:
+            return []
+
+        from qdrant_client.models import SearchRequest
+
+        requests = [
+            SearchRequest(
+                vector=qv, limit=limit, with_payload=True, with_vector=False
+            )
+            for qv in query_vectors
+        ]
+
+        results = await self.client.search_batch(
+            collection_name=collection,
+            requests=requests,
+        )
+
+        return [
+            [
+                VectorSearchResult(
+                    chunk_id=uuid.UUID(r.id),
+                    score=r.score,
+                    vector=None,
+                    payload=r.payload or {},
+                )
+                for r in batch
+            ]
+            for batch in results
+        ]
+
     def _build_filter(self, filters: dict[str, Any]) -> Filter | None:
         """Build Qdrant filter from dict."""
         conditions: list[FieldCondition] = []
