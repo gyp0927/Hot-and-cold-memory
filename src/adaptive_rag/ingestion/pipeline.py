@@ -41,6 +41,7 @@ class IngestionResult:
     hot_chunks: int = 0
     cold_chunks: int = 0
     error: str | None = None
+    message: str | None = None
     processing_time_ms: float = 0.0
 
 

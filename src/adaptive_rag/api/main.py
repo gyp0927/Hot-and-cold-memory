@@ -23,6 +23,7 @@ from adaptive_rag.tiers.decompression import DecompressionEngine
 from adaptive_rag.frequency.tracker import FrequencyTracker
 from adaptive_rag.retrieval.retriever import UnifiedRetriever
 from adaptive_rag.migration.engine import MigrationEngine
+from adaptive_rag.migration.scheduler import MigrationScheduler
 
 from .routers import query, documents, admin, health
 
@@ -105,6 +106,9 @@ async def initialize_services() -> dict:
         migration_engine=migration_engine,
     )
 
+    # Scheduler
+    migration_scheduler = MigrationScheduler()
+
     return {
         "vector_store": vector_store,
         "metadata_store": metadata_store,
@@ -117,6 +121,7 @@ async def initialize_services() -> dict:
         "retriever": retriever,
         "pipeline": pipeline,
         "migration_engine": migration_engine,
+        "migration_scheduler": migration_scheduler,
     }
 
 
@@ -135,8 +140,18 @@ async def lifespan(app: FastAPI):
     documents.set_stores(_services["metadata_store"], _services["document_store"])
     admin.set_migration_engine(_services["migration_engine"])
 
+    # Start background migration scheduler
+    scheduler = _services["migration_scheduler"]
+    scheduler.start(
+        migration_callback=_services["migration_engine"].run_migration_cycle,
+        cluster_cleanup_callback=_services["frequency_tracker"].cluster_store.cleanup_stale_clusters,
+    )
+
     logger.info("services_initialized")
     yield
+
+    # Graceful shutdown
+    scheduler.stop()
     logger.info("shutting_down")
 
 
