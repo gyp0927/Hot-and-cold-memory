@@ -1,5 +1,5 @@
 [project]
-name = "adaptive-memory"
+name = "hot-and-cold-memory"
 version = "0.1.0"
 description = "Adaptive Agent Memory with Frequency-Driven Tiered Storage"
 requires-python = ">=3.11"
@@ -66,7 +66,7 @@ dev = [
 ]
 
 [project.scripts]
-adaptive-memory = "adaptive_memory.api.main:main"
+hot-and-cold-memory = "hot_and_cold_memory.api.main:main"
 
 [tool.ruff]
 line-length = 100

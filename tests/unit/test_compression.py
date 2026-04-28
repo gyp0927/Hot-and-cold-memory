@@ -4,9 +4,9 @@ import uuid
 
 import pytest
 
-from adaptive_memory.tiers.base import MemoryEntry
-from adaptive_memory.tiers.compression import CompressedChunk, CompressionEngine
-from adaptive_memory.tiers.decompression import DecompressionEngine
+from hot_and_cold_memory.tiers.base import MemoryEntry
+from hot_and_cold_memory.tiers.compression import CompressedChunk, CompressionEngine
+from hot_and_cold_memory.tiers.decompression import DecompressionEngine
 
 
 class TestCompression:
@@ -89,7 +89,7 @@ class TestDecompressionEngine:
 
     def test_cosine_similarity(self):
         """Test cosine similarity calculation."""
-        from adaptive_memory.tiers.decompression import _cosine_similarity
+        from hot_and_cold_memory.tiers.decompression import _cosine_similarity
 
         a = [1.0, 0.0, 0.0]
         b = [1.0, 0.0, 0.0]

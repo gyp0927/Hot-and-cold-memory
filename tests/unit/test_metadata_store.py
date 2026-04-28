@@ -5,8 +5,8 @@ from datetime import datetime
 
 import pytest
 
-from adaptive_memory.core.config import Tier
-from adaptive_memory.storage.metadata_store.base import (
+from hot_and_cold_memory.core.config import Tier
+from hot_and_cold_memory.storage.metadata_store.base import (
     MemoryItem,
     TopicCluster,
 )

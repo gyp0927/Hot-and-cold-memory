@@ -2,8 +2,8 @@
 
 
 
-from adaptive_memory.migration.engine import MigrationEngine
-from adaptive_memory.migration.policies import MigrationPolicy
+from hot_and_cold_memory.migration.engine import MigrationEngine
+from hot_and_cold_memory.migration.policies import MigrationPolicy
 
 
 class TestMigrationPolicy:
@@ -67,7 +67,7 @@ class TestMigrationEngine:
                     hour = 3
                 return Time()
 
-        monkeypatch.setattr("adaptive_memory.migration.engine.datetime", MockDatetime)
+        monkeypatch.setattr("hot_and_cold_memory.migration.engine.datetime", MockDatetime)
         assert engine._is_off_peak() is True
 
     def test_is_off_peak_noon(self, monkeypatch):
@@ -87,5 +87,5 @@ class TestMigrationEngine:
                     hour = 12
                 return Time()
 
-        monkeypatch.setattr("adaptive_memory.migration.engine.datetime", MockDatetime)
+        monkeypatch.setattr("hot_and_cold_memory.migration.engine.datetime", MockDatetime)
         assert engine._is_off_peak() is False

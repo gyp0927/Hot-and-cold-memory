@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from adaptive_memory.api.main import create_app
-from adaptive_memory.api.routers import admin, health, memories, retrieve
+from hot_and_cold_memory.api.main import create_app
+from hot_and_cold_memory.api.routers import admin, health, memories, retrieve
 
 
 class TestRetrieveRouter:
