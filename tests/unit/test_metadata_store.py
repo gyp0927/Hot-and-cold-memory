@@ -5,11 +5,10 @@ from datetime import datetime
 
 import pytest
 
-from adaptive_rag.core.config import Tier
-from adaptive_rag.storage.metadata_store.base import (
-    ChunkMetadata,
-    DocumentMetadata,
-    QueryCluster,
+from adaptive_memory.core.config import Tier
+from adaptive_memory.storage.metadata_store.base import (
+    MemoryItem,
+    TopicCluster,
 )
 
 
@@ -17,139 +16,115 @@ class TestPostgresMetadataStore:
     """Test metadata store operations."""
 
     @pytest.mark.asyncio
-    async def test_create_and_get_chunk(self, metadata_store):
-        """Test creating and retrieving a chunk."""
-        chunk_id = uuid.uuid4()
-        doc_id = uuid.uuid4()
-        meta = ChunkMetadata(
-            chunk_id=chunk_id,
-            document_id=doc_id,
+    async def test_create_and_get_memory(self, metadata_store):
+        """Test creating and retrieving a memory."""
+        memory_id = uuid.uuid4()
+        meta = MemoryItem(
+            memory_id=memory_id,
             tier=Tier.HOT,
+            content="Test memory content",
             original_length=100,
+            memory_type="fact",
             access_count=0,
             frequency_score=1.0,
         )
-        await metadata_store.create_chunk(meta)
+        await metadata_store.create_memory(meta)
 
-        retrieved = await metadata_store.get_chunk(chunk_id)
+        retrieved = await metadata_store.get_memory(memory_id)
         assert retrieved is not None
-        assert retrieved.chunk_id == chunk_id
+        assert retrieved.memory_id == memory_id
         assert retrieved.tier == Tier.HOT
         assert retrieved.frequency_score == 1.0
+        assert retrieved.memory_type == "fact"
 
     @pytest.mark.asyncio
-    async def test_get_chunks_batch(self, metadata_store):
-        """Test batch chunk retrieval."""
-        doc_id = uuid.uuid4()
-        chunk_ids = [uuid.uuid4() for _ in range(5)]
-        for cid in chunk_ids:
-            await metadata_store.create_chunk(
-                ChunkMetadata(
-                    chunk_id=cid,
-                    document_id=doc_id,
+    async def test_get_memories_batch(self, metadata_store):
+        """Test batch memory retrieval."""
+        memory_ids = [uuid.uuid4() for _ in range(5)]
+        for mid in memory_ids:
+            await metadata_store.create_memory(
+                MemoryItem(
+                    memory_id=mid,
                     tier=Tier.HOT,
+                    content="test",
                     original_length=50,
                 )
             )
 
-        results = await metadata_store.get_chunks_batch(chunk_ids)
+        results = await metadata_store.get_memories_batch(memory_ids)
         assert len(results) == 5
 
     @pytest.mark.asyncio
-    async def test_update_chunks_batch(self, metadata_store):
-        """Test batch chunk update."""
-        doc_id = uuid.uuid4()
-        chunk_ids = [uuid.uuid4() for _ in range(3)]
-        for cid in chunk_ids:
-            await metadata_store.create_chunk(
-                ChunkMetadata(
-                    chunk_id=cid,
-                    document_id=doc_id,
+    async def test_update_memories_batch(self, metadata_store):
+        """Test batch memory update."""
+        memory_ids = [uuid.uuid4() for _ in range(3)]
+        for mid in memory_ids:
+            await metadata_store.create_memory(
+                MemoryItem(
+                    memory_id=mid,
                     tier=Tier.HOT,
+                    content="test",
                     original_length=50,
                     frequency_score=0.0,
                 )
             )
 
-        updates = {cid: {"frequency_score": 0.8} for cid in chunk_ids}
-        await metadata_store.update_chunks_batch(updates)
+        updates = {mid: {"frequency_score": 0.8} for mid in memory_ids}
+        await metadata_store.update_memories_batch(updates)
 
-        for cid in chunk_ids:
-            retrieved = await metadata_store.get_chunk(cid)
+        for mid in memory_ids:
+            retrieved = await metadata_store.get_memory(mid)
             assert retrieved.frequency_score == 0.8
 
     @pytest.mark.asyncio
     async def test_increment_access_batch(self, metadata_store):
         """Test batch access increment."""
-        doc_id = uuid.uuid4()
-        chunk_ids = [uuid.uuid4() for _ in range(3)]
-        for cid in chunk_ids:
-            await metadata_store.create_chunk(
-                ChunkMetadata(
-                    chunk_id=cid,
-                    document_id=doc_id,
+        memory_ids = [uuid.uuid4() for _ in range(3)]
+        for mid in memory_ids:
+            await metadata_store.create_memory(
+                MemoryItem(
+                    memory_id=mid,
                     tier=Tier.HOT,
+                    content="test",
                     original_length=50,
                     access_count=0,
                 )
             )
 
         await metadata_store.increment_access(
-            chunk_ids=chunk_ids,
+            memory_ids=memory_ids,
             cluster_id=None,
             timestamp=datetime.utcnow(),
         )
 
-        for cid in chunk_ids:
-            retrieved = await metadata_store.get_chunk(cid)
+        for mid in memory_ids:
+            retrieved = await metadata_store.get_memory(mid)
             assert retrieved.access_count == 1
 
     @pytest.mark.asyncio
-    async def test_get_document_by_hash(self, metadata_store):
-        """Test document lookup by content hash."""
-        doc_id = uuid.uuid4()
-        await metadata_store.create_document(
-            DocumentMetadata(
-                document_id=doc_id,
-                source_type="text",
-                source_uri="test.txt",
-                content_hash="abc123",
-                total_chunks=5,
-            )
-        )
-
-        found = await metadata_store.get_document_by_hash("abc123")
-        assert found is not None
-        assert found.document_id == doc_id
-
-        not_found = await metadata_store.get_document_by_hash("nonexistent")
-        assert not_found is None
-
-    @pytest.mark.asyncio
-    async def test_count_chunks_by_tier(self, metadata_store):
-        """Test counting chunks by tier."""
-        doc_id = uuid.uuid4()
+    async def test_count_memories_by_tier(self, metadata_store):
+        """Test counting memories by tier."""
         for _ in range(3):
-            await metadata_store.create_chunk(
-                ChunkMetadata(
-                    chunk_id=uuid.uuid4(),
-                    document_id=doc_id,
+            await metadata_store.create_memory(
+                MemoryItem(
+                    memory_id=uuid.uuid4(),
                     tier=Tier.HOT,
+                    content="test",
                     original_length=50,
                 )
             )
         for _ in range(2):
-            await metadata_store.create_chunk(
-                ChunkMetadata(
-                    chunk_id=uuid.uuid4(),
-                    document_id=doc_id,
+            await metadata_store.create_memory(
+                MemoryItem(
+                    memory_id=uuid.uuid4(),
                     tier=Tier.COLD,
+                    content="test",
                     original_length=50,
                 )
             )
 
-        hot_count = await metadata_store.count_chunks_by_tier(Tier.HOT)
-        cold_count = await metadata_store.count_chunks_by_tier(Tier.COLD)
+        hot_count = await metadata_store.count_memories_by_tier(Tier.HOT)
+        cold_count = await metadata_store.count_memories_by_tier(Tier.COLD)
         assert hot_count == 3
         assert cold_count == 2
 
@@ -159,7 +134,7 @@ class TestPostgresMetadataStore:
         cluster_ids = [uuid.uuid4() for _ in range(3)]
         for cid in cluster_ids:
             await metadata_store.create_cluster(
-                QueryCluster(
+                TopicCluster(
                     cluster_id=cid,
                     centroid=[0.1, 0.2, 0.3],
                     representative_query="test query",

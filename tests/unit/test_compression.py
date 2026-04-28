@@ -4,9 +4,9 @@ import uuid
 
 import pytest
 
-from adaptive_rag.ingestion.chunker import Chunk
-from adaptive_rag.tiers.compression import CompressedChunk, CompressionEngine
-from adaptive_rag.tiers.decompression import DecompressionEngine
+from adaptive_memory.tiers.base import MemoryEntry
+from adaptive_memory.tiers.compression import CompressedChunk, CompressionEngine
+from adaptive_memory.tiers.decompression import DecompressionEngine
 
 
 class TestCompression:
@@ -14,15 +14,15 @@ class TestCompression:
 
     def test_compressed_chunk_dataclass(self):
         """Test CompressedChunk dataclass."""
-        chunk_id = uuid.uuid4()
+        memory_id = uuid.uuid4()
         comp = CompressedChunk(
-            chunk_id=chunk_id,
+            chunk_id=memory_id,
             summary_text="This is a summary.",
             key_entities=["Entity1", "Entity2"],
             key_facts=["Fact1"],
             compression_ratio=0.25,
         )
-        assert comp.chunk_id == chunk_id
+        assert comp.chunk_id == memory_id
         assert comp.summary_text == "This is a summary."
         assert len(comp.key_entities) == 2
         assert comp.compression_ratio == 0.25
@@ -49,9 +49,9 @@ class TestCompression:
         engine = CompressionEngine()
 
         # Mock the compress method
-        async def mock_compress(chunk):
+        async def mock_compress(memory):
             return CompressedChunk(
-                chunk_id=chunk.chunk_id,
+                chunk_id=memory.memory_id,
                 summary_text="summary",
                 key_entities=[],
                 key_facts=[],
@@ -60,32 +60,28 @@ class TestCompression:
 
         monkeypatch.setattr(engine, "compress", mock_compress)
 
-        chunks = [
-            Chunk(chunk_id=uuid.uuid4(), document_id=uuid.uuid4(), text="text 1"),
-            Chunk(chunk_id=uuid.uuid4(), document_id=uuid.uuid4(), text="text 2"),
+        memories = [
+            MemoryEntry(memory_id=uuid.uuid4(), content="text 1"),
+            MemoryEntry(memory_id=uuid.uuid4(), content="text 2"),
         ]
-        results = await engine.compress_batch(chunks)
+        results = await engine.compress_batch(memories)
         assert len(results) == 2
         assert all(r.summary_text == "summary" for r in results)
 
 
-class TestChunkDataclass:
-    """Test Chunk dataclass."""
+class TestMemoryEntryDataclass:
+    """Test MemoryEntry dataclass."""
 
-    def test_chunk_creation(self):
-        """Test creating a chunk."""
-        doc_id = uuid.uuid4()
-        chunk_id = uuid.uuid4()
-        chunk = Chunk(
-            chunk_id=chunk_id,
-            document_id=doc_id,
-            text="Sample text content",
-            index=0,
+    def test_memory_entry_creation(self):
+        """Test creating a memory entry."""
+        memory_id = uuid.uuid4()
+        entry = MemoryEntry(
+            memory_id=memory_id,
+            content="Sample memory content",
             tags=["test"],
         )
-        assert chunk.text == "Sample text content"
-        assert chunk.document_id == doc_id
-        assert chunk.index == 0
+        assert entry.content == "Sample memory content"
+        assert entry.tags == ["test"]
 
 
 class TestDecompressionEngine:
@@ -93,7 +89,7 @@ class TestDecompressionEngine:
 
     def test_cosine_similarity(self):
         """Test cosine similarity calculation."""
-        from adaptive_rag.tiers.decompression import _cosine_similarity
+        from adaptive_memory.tiers.decompression import _cosine_similarity
 
         a = [1.0, 0.0, 0.0]
         b = [1.0, 0.0, 0.0]
@@ -106,7 +102,7 @@ class TestDecompressionEngine:
         assert _cosine_similarity(a, [1.0, 0.0]) == 0.0
 
     def test_flag_for_review(self):
-        """Test flagging chunks for review."""
+        """Test flagging memories for review."""
         engine = DecompressionEngine()
-        engine.flag_for_review("chunk-123")
-        assert "chunk-123" in engine.flagged_chunk_ids
+        engine.flag_for_review("memory-123")
+        assert "memory-123" in engine.flagged_chunk_ids

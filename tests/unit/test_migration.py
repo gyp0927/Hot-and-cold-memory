@@ -2,8 +2,8 @@
 
 
 
-from adaptive_rag.migration.engine import MigrationEngine
-from adaptive_rag.migration.policies import MigrationPolicy
+from adaptive_memory.migration.engine import MigrationEngine
+from adaptive_memory.migration.policies import MigrationPolicy
 
 
 class TestMigrationPolicy:
@@ -24,14 +24,26 @@ class TestMigrationPolicy:
     def test_should_promote_high_frequency(self):
         """Chunks with high frequency should be promoted."""
         policy = MigrationPolicy()
-        assert policy.should_promote(0.7) is True
-        assert policy.should_promote(0.9) is True
+        assert policy.should_promote(0.7, 0) is True
+        assert policy.should_promote(0.9, 0) is True
 
     def test_should_not_promote_low_frequency(self):
         """Chunks with low frequency should not be promoted."""
         policy = MigrationPolicy()
-        assert policy.should_promote(0.3) is False
-        assert policy.should_promote(0.5) is False
+        assert policy.should_promote(0.3, 0) is False
+        assert policy.should_promote(0.5, 0) is False
+
+    def test_should_promote_high_access_count(self):
+        """Chunks with high cumulative access count should be promoted."""
+        policy = MigrationPolicy()
+        assert policy.should_promote(0.3, 50) is True
+        assert policy.should_promote(0.5, 100) is True
+
+    def test_should_not_promote_low_access_count(self):
+        """Chunks with low access count should not be promoted."""
+        policy = MigrationPolicy()
+        assert policy.should_promote(0.3, 10) is False
+        assert policy.should_promote(0.5, 30) is False
 
 
 class TestMigrationEngine:
@@ -55,7 +67,7 @@ class TestMigrationEngine:
                     hour = 3
                 return Time()
 
-        monkeypatch.setattr("adaptive_rag.migration.engine.datetime", MockDatetime)
+        monkeypatch.setattr("adaptive_memory.migration.engine.datetime", MockDatetime)
         assert engine._is_off_peak() is True
 
     def test_is_off_peak_noon(self, monkeypatch):
@@ -75,5 +87,5 @@ class TestMigrationEngine:
                     hour = 12
                 return Time()
 
-        monkeypatch.setattr("adaptive_rag.migration.engine.datetime", MockDatetime)
+        monkeypatch.setattr("adaptive_memory.migration.engine.datetime", MockDatetime)
         assert engine._is_off_peak() is False

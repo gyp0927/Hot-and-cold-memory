@@ -3,7 +3,7 @@
 import math
 from datetime import datetime, timedelta
 
-from adaptive_rag.frequency.decay import DecayEngine
+from adaptive_memory.frequency.decay import DecayEngine
 
 
 class TestDecayEngine:
