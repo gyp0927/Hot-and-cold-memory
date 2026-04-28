@@ -248,11 +248,21 @@ class BaseMetadataStore(ABC):
         pass
 
     @abstractmethod
+    async def get_clusters_batch(self, cluster_ids: list[uuid.UUID]) -> list[QueryCluster]:
+        """Get multiple clusters by ID in a single query."""
+        pass
+
+    @abstractmethod
     async def delete_clusters(self, cluster_ids: list[uuid.UUID]) -> int:
         """Delete query clusters. Returns count deleted."""
         pass
 
     # Migration log operations
+    @abstractmethod
+    async def create_access_log(self, log: AccessLog) -> None:
+        """Create an access log entry."""
+        pass
+
     @abstractmethod
     async def create_migration_log(self, log: MigrationLog) -> None:
         """Create a migration log entry."""

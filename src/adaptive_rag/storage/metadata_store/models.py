@@ -32,16 +32,16 @@ class ChunkModel(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     document_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("documents.document_id"), nullable=False
+        String(36), ForeignKey("documents.document_id"), nullable=False, index=True
     )
-    tier: Mapped[str] = mapped_column(String(10), nullable=False)
+    tier: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
 
     original_length: Mapped[int] = mapped_column(Integer, nullable=False)
     compressed_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     access_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    frequency_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    frequency_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, index=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
@@ -55,7 +55,7 @@ class ChunkModel(Base):
     )
 
     topic_cluster_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("query_clusters.cluster_id"), nullable=True
+        String(36), ForeignKey("query_clusters.cluster_id"), nullable=True, index=True
     )
 
     compression_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
@@ -76,7 +76,7 @@ class DocumentModel(Base):
     source_uri: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     author: Mapped[str | None] = mapped_column(Text, nullable=True)
-    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     total_chunks: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     doc_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(

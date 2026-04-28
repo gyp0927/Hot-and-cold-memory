@@ -279,19 +279,21 @@ class PostgresMetadataStore(BaseMetadataStore):
         cluster_id: uuid.UUID | None,
         timestamp: datetime,
     ) -> None:
-        """Increment access count for chunks."""
+        """Increment access count for chunks in a single UPDATE."""
+        if not chunk_ids:
+            return
+        id_strs = [_to_uuid_str(cid) for cid in chunk_ids]
         cluster_str = _to_uuid_str(cluster_id) if cluster_id else None
         async with self.async_session() as session:
-            for chunk_id in chunk_ids:
-                await session.execute(
-                    update(ChunkModel)
-                    .where(ChunkModel.chunk_id == _to_uuid_str(chunk_id))
-                    .values(
-                        access_count=ChunkModel.access_count + 1,
-                        last_accessed_at=timestamp,
-                        topic_cluster_id=cluster_str,
-                    )
+            await session.execute(
+                update(ChunkModel)
+                .where(ChunkModel.chunk_id.in_(id_strs))
+                .values(
+                    access_count=ChunkModel.access_count + 1,
+                    last_accessed_at=timestamp,
+                    topic_cluster_id=cluster_str,
                 )
+            )
             await session.commit()
 
     async def create_document(self, metadata: DocumentMetadata) -> None:
@@ -445,6 +447,18 @@ class PostgresMetadataStore(BaseMetadataStore):
             models = result.scalars().all()
             return [_cluster_to_dataclass(m) for m in models]
 
+    async def get_clusters_batch(self, cluster_ids: list[uuid.UUID]) -> list[QueryCluster]:
+        """Get multiple clusters by ID in a single query."""
+        if not cluster_ids:
+            return []
+        id_strs = [_to_uuid_str(cid) for cid in cluster_ids]
+        async with self.async_session() as session:
+            result = await session.execute(
+                select(QueryClusterModel).where(QueryClusterModel.cluster_id.in_(id_strs))
+            )
+            models = result.scalars().all()
+            return [_cluster_to_dataclass(m) for m in models]
+
     async def delete_clusters(self, cluster_ids: list[uuid.UUID]) -> int:
         """Delete query clusters."""
         id_strs = [_to_uuid_str(cid) for cid in cluster_ids]
@@ -454,6 +468,20 @@ class PostgresMetadataStore(BaseMetadataStore):
             )
             await session.commit()
             return result.rowcount or 0
+
+    async def create_access_log(self, log: AccessLog) -> None:
+        """Create an access log entry."""
+        async with self.async_session() as session:
+            model = AccessLogModel(
+                chunk_id=_to_uuid_str(log.chunk_id),
+                query_cluster_id=_to_uuid_str(log.query_cluster_id) if log.query_cluster_id else None,
+                query_text=log.query_text,
+                retrieved_at=log.retrieved_at,
+                response_time_ms=log.response_time_ms,
+                tier_accessed=log.tier_accessed,
+            )
+            session.add(model)
+            await session.commit()
 
     async def create_migration_log(self, log: MigrationLog) -> None:
         """Create a migration log entry."""

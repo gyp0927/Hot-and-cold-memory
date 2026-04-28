@@ -8,7 +8,7 @@ import uuid
 from adaptive_rag.core.config import get_settings
 from adaptive_rag.core.logging import get_logger
 from adaptive_rag.ingestion.embedder import Embedder
-from adaptive_rag.storage.metadata_store.base import BaseMetadataStore, QueryCluster
+from adaptive_rag.storage.metadata_store.base import BaseMetadataStore, QueryCluster, AccessLog
 from adaptive_rag.storage.vector_store.base import BaseVectorStore
 
 from .clustering import QueryClusterStore
@@ -68,6 +68,17 @@ class FrequencyTracker:
 
         # 4. Recalculate frequency scores
         await self._recalculate_scores(chunk_ids, timestamp)
+
+        # 5. Log access for each chunk
+        for chunk_id in chunk_ids:
+            await self.metadata_store.create_access_log(
+                AccessLog(
+                    chunk_id=chunk_id,
+                    query_cluster_id=cluster_id,
+                    query_text=query_text,
+                    retrieved_at=timestamp,
+                )
+            )
 
         logger.debug(
             "access_recorded",
@@ -214,17 +225,11 @@ class FrequencyTracker:
             m.topic_cluster_id for m in metadatas if m.topic_cluster_id
         }
 
-        # 3. Batch fetch all needed clusters
+        # 3. Batch fetch only needed clusters
         cluster_scores: dict[uuid.UUID, float] = {}
         if cluster_ids:
-            # get_all_clusters is the only batch cluster API available;
-            # filter locally to avoid N+1.
-            all_clusters = await self.metadata_store.get_all_clusters()
-            cluster_scores = {
-                c.cluster_id: c.frequency_score
-                for c in all_clusters
-                if c.cluster_id in cluster_ids
-            }
+            clusters = await self.metadata_store.get_clusters_batch(list(cluster_ids))
+            cluster_scores = {c.cluster_id: c.frequency_score for c in clusters}
 
         # 4. Compute new scores and build batch update
         batch_updates: dict[uuid.UUID, dict[str, Any]] = {}
