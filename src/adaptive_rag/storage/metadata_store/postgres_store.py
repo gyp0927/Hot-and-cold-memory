@@ -16,8 +16,9 @@ from .base import (
     DocumentMetadata,
     QueryCluster,
     MigrationLog,
+    AccessLog,
 )
-from .models import Base, ChunkModel, DocumentModel, QueryClusterModel, MigrationLogModel
+from .models import Base, ChunkModel, DocumentModel, QueryClusterModel, MigrationLogModel, AccessLogModel
 
 logger = get_logger(__name__)
 
