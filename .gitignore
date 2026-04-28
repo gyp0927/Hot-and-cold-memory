@@ -65,4 +65,3 @@ test_qdrant*/
 bin/
 .api_pid
 .claude/
-start.bat
