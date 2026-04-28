@@ -1,5 +1,4 @@
-# Adaptive Memory
-
+# Hot-and-cold-memory
 <p align="center">
   <b>Agent Memory System with Frequency-Driven Hot/Cold Tiering</b>
 </p>
