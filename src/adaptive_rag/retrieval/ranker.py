@@ -1,6 +1,5 @@
 """Result merging and re-ranking across tiers."""
 
-from adaptive_rag.core.config import Tier
 from adaptive_rag.core.logging import get_logger
 from adaptive_rag.tiers.base import RetrievedChunk
 

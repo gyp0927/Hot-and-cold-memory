@@ -18,8 +18,8 @@ def extract_image(file_bytes: bytes) -> str:
         IngestionError: If OCR is not available or extraction fails.
     """
     try:
-        from PIL import Image
         import pytesseract
+        from PIL import Image
 
         image = Image.open(BytesIO(file_bytes))
         text = pytesseract.image_to_string(image, lang="chi_sim+eng")

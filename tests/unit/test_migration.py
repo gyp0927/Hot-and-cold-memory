@@ -1,12 +1,9 @@
 """Unit tests for migration system."""
 
-from datetime import datetime
 
-import pytest
 
-from adaptive_rag.core.config import get_settings
-from adaptive_rag.migration.policies import MigrationPolicy
 from adaptive_rag.migration.engine import MigrationEngine
+from adaptive_rag.migration.policies import MigrationPolicy
 
 
 class TestMigrationPolicy:

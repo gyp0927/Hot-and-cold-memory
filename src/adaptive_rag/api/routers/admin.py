@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from adaptive_rag.core.config import Tier
 from adaptive_rag.core.logging import get_logger
-from adaptive_rag.migration.engine import MigrationEngine, MigrationReport
+from adaptive_rag.migration.engine import MigrationEngine
 from adaptive_rag.storage.metadata_store.base import BaseMetadataStore
 
 logger = get_logger(__name__)

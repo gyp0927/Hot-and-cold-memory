@@ -1,24 +1,31 @@
 """Metadata store implementation using SQLAlchemy async (PostgreSQL/SQLite)."""
 
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
-from sqlalchemy import select, update, delete, and_
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy import and_, delete, select, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from adaptive_rag.core.config import get_settings, Tier
+from adaptive_rag.core.config import Tier, get_settings
 from adaptive_rag.core.logging import get_logger
 
 from .base import (
+    AccessLog,
     BaseMetadataStore,
     ChunkMetadata,
     DocumentMetadata,
-    QueryCluster,
     MigrationLog,
-    AccessLog,
+    QueryCluster,
 )
-from .models import Base, ChunkModel, DocumentModel, QueryClusterModel, MigrationLogModel, AccessLogModel
+from .models import (
+    AccessLogModel,
+    Base,
+    ChunkModel,
+    DocumentModel,
+    MigrationLogModel,
+    QueryClusterModel,
+)
 
 logger = get_logger(__name__)
 

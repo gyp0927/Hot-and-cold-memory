@@ -1,26 +1,21 @@
 """Document ingestion pipeline."""
 
-import asyncio
 import hashlib
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from adaptive_rag.core.config import Tier, get_settings
-from adaptive_rag.core.exceptions import IngestionError
 from adaptive_rag.core.logging import get_logger
 from adaptive_rag.frequency.tracker import FrequencyTracker
-from adaptive_rag.monitoring.metrics import CHUNKS_TOTAL
 from adaptive_rag.ingestion.chunker import Chunk
-from adaptive_rag.storage.document_store.base import BaseDocumentStore
+from adaptive_rag.monitoring.metrics import CHUNKS_TOTAL
 from adaptive_rag.storage.metadata_store.base import (
     BaseMetadataStore,
     DocumentMetadata,
-    ChunkMetadata,
 )
-from adaptive_rag.storage.vector_store.base import BaseVectorStore
 from adaptive_rag.tiers.cold_tier import ColdTier
 from adaptive_rag.tiers.hot_tier import HotTier
 

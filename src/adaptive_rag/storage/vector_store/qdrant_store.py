@@ -1,7 +1,7 @@
 """Qdrant vector store implementation."""
 
-from typing import Any
 import uuid
+from typing import Any
 
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (

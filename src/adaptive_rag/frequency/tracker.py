@@ -1,14 +1,13 @@
 """Frequency tracking with time-decay and semantic clustering."""
 
-import asyncio
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
 from adaptive_rag.core.config import get_settings
 from adaptive_rag.core.logging import get_logger
 from adaptive_rag.ingestion.embedder import Embedder
-from adaptive_rag.storage.metadata_store.base import BaseMetadataStore, QueryCluster, AccessLog
+from adaptive_rag.storage.metadata_store.base import AccessLog, BaseMetadataStore, QueryCluster
 from adaptive_rag.storage.vector_store.base import BaseVectorStore
 
 from .clustering import QueryClusterStore

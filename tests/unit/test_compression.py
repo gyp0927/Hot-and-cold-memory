@@ -1,7 +1,6 @@
 """Unit tests for compression and decompression."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

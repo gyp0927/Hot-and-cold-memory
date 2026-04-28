@@ -1,8 +1,8 @@
 """Cold tier: stores compressed summaries with summary embeddings."""
 
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
 from adaptive_rag.core.config import Tier, get_settings
 from adaptive_rag.core.exceptions import TierError
@@ -18,7 +18,7 @@ from adaptive_rag.storage.metadata_store.base import (
 from adaptive_rag.storage.vector_store.base import BaseVectorStore
 
 from .base import BaseTier, RetrievedChunk
-from .compression import CompressionEngine, CompressedChunk
+from .compression import CompressionEngine
 from .decompression import DecompressionEngine
 
 logger = get_logger(__name__)

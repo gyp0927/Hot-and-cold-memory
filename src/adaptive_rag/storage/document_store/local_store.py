@@ -52,7 +52,7 @@ class LocalDocumentStore(BaseDocumentStore):
             return None
 
         try:
-            async with aiofiles.open(path, "r", encoding="utf-8") as f:
+            async with aiofiles.open(path, encoding="utf-8") as f:
                 return await f.read()
         except OSError:
             return None

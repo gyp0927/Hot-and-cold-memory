@@ -5,8 +5,8 @@ All operations run in thread pool to avoid blocking asyncio.
 """
 
 import asyncio
-from typing import Any
 import uuid
+from typing import Any
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (

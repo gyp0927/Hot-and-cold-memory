@@ -3,8 +3,6 @@
 import math
 from datetime import datetime, timedelta
 
-import pytest
-
 from adaptive_rag.frequency.decay import DecayEngine
 
 

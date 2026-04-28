@@ -1,26 +1,24 @@
 """Tier migration engine."""
 
 import asyncio
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
-import uuid
 
 from adaptive_rag.core.config import Tier, get_settings
-from adaptive_rag.core.exceptions import MigrationError, ChunkNotFoundError
+from adaptive_rag.core.exceptions import ChunkNotFoundError, MigrationError
 from adaptive_rag.core.logging import get_logger
-from adaptive_rag.monitoring.metrics import MIGRATION_TOTAL, MIGRATION_DURATION
 from adaptive_rag.ingestion.chunker import Chunk
 from adaptive_rag.ingestion.embedder import Embedder
+from adaptive_rag.monitoring.metrics import MIGRATION_DURATION, MIGRATION_TOTAL
 from adaptive_rag.storage.metadata_store.base import (
     BaseMetadataStore,
     MigrationLog,
 )
 from adaptive_rag.tiers.base import RetrievedChunk
-from adaptive_rag.tiers.hot_tier import HotTier
 from adaptive_rag.tiers.cold_tier import ColdTier
 from adaptive_rag.tiers.compression import CompressionEngine
-from adaptive_rag.tiers.decompression import DecompressionEngine
+from adaptive_rag.tiers.hot_tier import HotTier
 
 from .policies import MigrationPolicy
 

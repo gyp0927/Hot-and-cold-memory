@@ -20,8 +20,9 @@ def event_loop():
 async def metadata_store():
     """Create a SQLite-backed metadata store for testing."""
     import os
-    from adaptive_rag.storage.metadata_store.postgres_store import PostgresMetadataStore
+
     from adaptive_rag.core.config import get_settings
+    from adaptive_rag.storage.metadata_store.postgres_store import PostgresMetadataStore
 
     settings = get_settings()
     # Use a temporary SQLite database for tests
@@ -43,6 +44,7 @@ async def metadata_store():
 async def vector_store():
     """Create a local Qdrant store for testing."""
     import shutil
+
     from adaptive_rag.storage.vector_store.local_qdrant_store import LocalQdrantStore
 
     tmp_dir = tempfile.mkdtemp()
@@ -58,8 +60,9 @@ async def vector_store():
 async def document_store():
     """Create a local document store for testing."""
     import shutil
-    from adaptive_rag.storage.document_store.local_store import LocalDocumentStore
+
     from adaptive_rag.core.config import get_settings
+    from adaptive_rag.storage.document_store.local_store import LocalDocumentStore
 
     settings = get_settings()
     tmp_dir = tempfile.mkdtemp()

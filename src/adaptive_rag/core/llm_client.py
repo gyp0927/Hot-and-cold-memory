@@ -1,13 +1,10 @@
 """Unified LLM client supporting OpenAI and Anthropic formats."""
 
-import json
 from typing import Any
-
-import httpx
 
 from adaptive_rag.core.config import get_settings
 from adaptive_rag.core.logging import get_logger
-from adaptive_rag.monitoring.metrics import LLM_REQUESTS_TOTAL, LLM_REQUEST_DURATION
+from adaptive_rag.monitoring.metrics import LLM_REQUEST_DURATION, LLM_REQUESTS_TOTAL
 
 logger = get_logger(__name__)
 

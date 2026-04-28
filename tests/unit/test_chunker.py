@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from adaptive_rag.ingestion.chunker import RecursiveChunker, FixedSizeChunker
+from adaptive_rag.ingestion.chunker import FixedSizeChunker, RecursiveChunker
 
 
 class TestRecursiveChunker:

@@ -3,8 +3,8 @@
 import asyncio
 import json
 import re
-from dataclasses import dataclass
 import uuid
+from dataclasses import dataclass
 
 from adaptive_rag.core.config import get_settings
 from adaptive_rag.core.exceptions import CompressionError

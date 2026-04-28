@@ -1,10 +1,10 @@
 """Abstract base class for metadata stores."""
 
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
-import uuid
 
 from adaptive_rag.core.config import Tier
 

@@ -5,9 +5,7 @@ import hashlib
 from collections import OrderedDict
 from typing import Any
 
-import numpy as np
-
-from adaptive_rag.core.config import get_settings, EmbeddingProvider
+from adaptive_rag.core.config import EmbeddingProvider, get_settings
 from adaptive_rag.core.exceptions import IngestionError
 from adaptive_rag.core.logging import get_logger
 

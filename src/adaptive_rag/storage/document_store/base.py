@@ -1,7 +1,7 @@
 """Abstract base class for document stores."""
 
-from abc import ABC, abstractmethod
 import uuid
+from abc import ABC, abstractmethod
 
 
 class BaseDocumentStore(ABC):

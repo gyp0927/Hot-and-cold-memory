@@ -1,18 +1,17 @@
 """SQLAlchemy models for metadata store (PostgreSQL/SQLite compatible)."""
 
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
 from sqlalchemy import (
     JSON,
-    BigInteger,
+    DateTime,
     Float,
+    ForeignKey,
     Integer,
     String,
     Text,
-    DateTime,
-    ForeignKey,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 

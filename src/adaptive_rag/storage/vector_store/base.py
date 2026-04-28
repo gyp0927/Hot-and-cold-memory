@@ -1,9 +1,9 @@
 """Abstract base class for vector stores."""
 
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
-import uuid
 
 
 @dataclass

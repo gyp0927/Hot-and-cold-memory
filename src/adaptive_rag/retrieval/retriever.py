@@ -6,10 +6,10 @@ from typing import Any
 
 from adaptive_rag.core.config import Tier
 from adaptive_rag.core.logging import get_logger
-from adaptive_rag.ingestion.embedder import Embedder
 from adaptive_rag.frequency.tracker import FrequencyTracker
-from adaptive_rag.tiers.hot_tier import HotTier
+from adaptive_rag.ingestion.embedder import Embedder
 from adaptive_rag.tiers.cold_tier import ColdTier
+from adaptive_rag.tiers.hot_tier import HotTier
 
 from .router import FrequencyRouter, RetrievalResult
 

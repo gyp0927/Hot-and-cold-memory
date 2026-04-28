@@ -1,10 +1,8 @@
 """Text chunking strategies."""
 
-import asyncio
 import re
-from dataclasses import dataclass
-from typing import Iterator
 import uuid
+from dataclasses import dataclass
 
 from adaptive_rag.core.logging import get_logger
 

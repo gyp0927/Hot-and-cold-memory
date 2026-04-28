@@ -1,6 +1,6 @@
 """Query endpoints."""
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 
 from adaptive_rag.api.schemas.query import QueryRequest, QueryResponse, RetrievedChunkSchema
 from adaptive_rag.core.config import Tier

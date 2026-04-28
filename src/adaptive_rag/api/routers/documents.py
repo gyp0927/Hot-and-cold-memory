@@ -1,24 +1,25 @@
 """Document ingestion endpoints."""
 
 import os
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from adaptive_rag.api.schemas.document import (
+    ChunkContent,
+    DocumentDetailResponse,
+    DocumentListItem,
+    DocumentListResponse,
     DocumentUploadRequest,
     DocumentUploadResponse,
-    DocumentListResponse,
-    DocumentListItem,
-    DocumentDetailResponse,
-    ChunkContent,
 )
 from adaptive_rag.core.logging import get_logger
-from adaptive_rag.ingestion.extractors.pdf import extract_pdf
 from adaptive_rag.ingestion.extractors.docx import extract_docx
 from adaptive_rag.ingestion.extractors.image import extract_image
+from adaptive_rag.ingestion.extractors.pdf import extract_pdf
 from adaptive_rag.ingestion.extractors.text import extract_text_from_bytes
 from adaptive_rag.ingestion.pipeline import IngestionPipeline
-from adaptive_rag.storage.metadata_store.postgres_store import PostgresMetadataStore
 from adaptive_rag.storage.document_store.local_store import LocalDocumentStore
+from adaptive_rag.storage.metadata_store.postgres_store import PostgresMetadataStore
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/documents", tags=["Documents"])

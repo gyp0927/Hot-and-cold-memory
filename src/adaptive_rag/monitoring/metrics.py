@@ -1,6 +1,6 @@
 """Prometheus metrics for monitoring."""
 
-from prometheus_client import Counter, Histogram, Gauge, Info
+from prometheus_client import Counter, Gauge, Histogram, Info
 
 # Query metrics
 QUERY_TOTAL = Counter(

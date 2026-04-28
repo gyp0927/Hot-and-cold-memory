@@ -1,10 +1,9 @@
 """Abstract tier interface."""
 
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
-import uuid
 
 from adaptive_rag.core.config import Tier
 

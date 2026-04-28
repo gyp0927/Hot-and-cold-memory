@@ -1,9 +1,10 @@
 """Central configuration with Pydantic-settings."""
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
 from enum import Enum
 from typing import Literal
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Tier(str, Enum):

@@ -1,19 +1,19 @@
 """Frequency-driven query router."""
 
 import asyncio
+import uuid
 import weakref
 from dataclasses import dataclass
 from typing import Any
-import uuid
 
-from adaptive_rag.core.config import Tier, RoutingStrategy, get_settings
+from adaptive_rag.core.config import RoutingStrategy, Tier, get_settings
 from adaptive_rag.core.logging import get_logger
 from adaptive_rag.frequency.tracker import FrequencyTracker
 from adaptive_rag.ingestion.embedder import Embedder
+from adaptive_rag.monitoring.metrics import QUERY_DURATION, QUERY_TOTAL
 from adaptive_rag.tiers.base import RetrievedChunk
-from adaptive_rag.tiers.hot_tier import HotTier
 from adaptive_rag.tiers.cold_tier import ColdTier
-from adaptive_rag.monitoring.metrics import QUERY_TOTAL, QUERY_DURATION
+from adaptive_rag.tiers.hot_tier import HotTier
 
 from .ranker import ResultRanker
 

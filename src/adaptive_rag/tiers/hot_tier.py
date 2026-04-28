@@ -1,8 +1,8 @@
 """Hot tier: stores full original text with embeddings."""
 
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
 from adaptive_rag.core.config import Tier, get_settings
 from adaptive_rag.core.exceptions import TierError

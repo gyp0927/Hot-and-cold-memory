@@ -1,8 +1,9 @@
 """API request/response schemas for documents."""
 
-from pydantic import BaseModel, Field
-from typing import Literal
 import uuid
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class DocumentUploadRequest(BaseModel):

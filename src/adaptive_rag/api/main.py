@@ -4,30 +4,30 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
 
 from adaptive_rag.core.config import get_settings
-from adaptive_rag.core.logging import setup_logging, get_logger
+from adaptive_rag.core.logging import get_logger, setup_logging
+from adaptive_rag.frequency.tracker import FrequencyTracker
 from adaptive_rag.ingestion.embedder import Embedder
 from adaptive_rag.ingestion.pipeline import IngestionPipeline
+from adaptive_rag.migration.engine import MigrationEngine
+from adaptive_rag.migration.scheduler import MigrationScheduler
+from adaptive_rag.retrieval.retriever import UnifiedRetriever
 from adaptive_rag.storage.cache.memory_cache import MemoryCache
 from adaptive_rag.storage.cache.redis_cache import RedisCache
 from adaptive_rag.storage.document_store.local_store import LocalDocumentStore
 from adaptive_rag.storage.metadata_store.postgres_store import PostgresMetadataStore
 from adaptive_rag.storage.vector_store.local_qdrant_store import LocalQdrantStore
-from adaptive_rag.tiers.hot_tier import HotTier
 from adaptive_rag.tiers.cold_tier import ColdTier
 from adaptive_rag.tiers.compression import CompressionEngine
 from adaptive_rag.tiers.decompression import DecompressionEngine
-from adaptive_rag.frequency.tracker import FrequencyTracker
-from adaptive_rag.retrieval.retriever import UnifiedRetriever
-from adaptive_rag.migration.engine import MigrationEngine
-from adaptive_rag.migration.scheduler import MigrationScheduler
+from adaptive_rag.tiers.hot_tier import HotTier
 
-from .routers import query, documents, admin, health
+from .routers import admin, documents, health, query
 
 logger = get_logger(__name__)
 

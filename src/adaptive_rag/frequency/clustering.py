@@ -1,9 +1,9 @@
 """Semantic query clustering for topic-based frequency tracking."""
 
 import asyncio
+import uuid
 from datetime import datetime, timedelta
 from typing import Any
-import uuid
 
 from adaptive_rag.core.config import get_settings
 from adaptive_rag.core.exceptions import ClusterNotFoundError
@@ -311,8 +311,8 @@ class QueryClusterStore:
             raise ClusterNotFoundError(f"Cluster {cluster_id} not found")
 
         try:
-            from sklearn.cluster import KMeans
             import numpy as np
+            from sklearn.cluster import KMeans
         except ImportError as e:
             logger.error("sklearn_not_installed_for_cluster_split", error=str(e))
             raise ImportError(

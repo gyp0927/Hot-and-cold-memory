@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from adaptive_rag.api.main import create_app
-from adaptive_rag.api.routers import query, documents, admin, health
+from adaptive_rag.api.routers import admin, documents, health, query
 
 
 class TestQueryRouter:
