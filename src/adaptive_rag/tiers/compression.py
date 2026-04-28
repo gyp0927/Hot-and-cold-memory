@@ -98,7 +98,7 @@ Output a JSON array with one object per segment, in the same order:
 
         try:
             # Use JSON response format for OpenAI, plain text for Anthropic
-            if self.client._is_anthropic_format():
+            if self.client.is_anthropic_format():
                 response_text = await self.client.complete(
                     prompt=prompt,
                     model=self.model,
@@ -208,7 +208,7 @@ Output a JSON array with one object per segment, in the same order:
         )
 
         try:
-            if self.client._is_anthropic_format():
+            if self.client.is_anthropic_format():
                 response_text = await self.client.complete(
                     prompt=prompt,
                     model=self.model,

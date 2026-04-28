@@ -110,6 +110,19 @@ class BaseMetadataStore(ABC):
         pass
 
     @abstractmethod
+    async def get_chunks_batch(self, chunk_ids: list[uuid.UUID]) -> list[ChunkMetadata]:
+        """Get multiple chunks by ID in a single query.
+
+        Returns only found chunks; missing IDs are silently omitted.
+        """
+        pass
+
+    @abstractmethod
+    async def create_chunks_batch(self, metadatas: list[ChunkMetadata]) -> None:
+        """Create multiple chunk records in a single transaction."""
+        pass
+
+    @abstractmethod
     async def update_chunk(
         self,
         chunk_id: uuid.UUID,
@@ -132,6 +145,11 @@ class BaseMetadataStore(ABC):
         limit: int = 100,
     ) -> list[ChunkMetadata]:
         """Query chunks by tier and frequency score range."""
+        pass
+
+    @abstractmethod
+    async def count_chunks_by_tier(self, tier: Tier) -> int:
+        """Count chunks in a given tier."""
         pass
 
     @abstractmethod

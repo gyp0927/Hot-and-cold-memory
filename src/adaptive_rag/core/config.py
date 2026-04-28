@@ -119,7 +119,6 @@ class Settings(BaseSettings):
     # 兼容 OpenAI 格式的任意服务商（OpenAI/DeepSeek/通义千问/Kimi等）
     LLM_BASE_URL: str = "https://api.openai.com/v1"
     LLM_API_KEY: str = Field(default="", repr=False)
-    COMPRESSION_MODEL: str = "gpt-4o-mini"
     DECOMPRESSION_MODEL: str = "gpt-4o"
     LLM_MAX_TOKENS: int = 4096
     LLM_TEMPERATURE: float = 0.0

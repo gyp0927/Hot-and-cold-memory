@@ -24,7 +24,7 @@ class LLMClient:
         self._openai_client: Any = None
         self._anthropic_client: Any = None
 
-    def _is_anthropic_format(self) -> bool:
+    def is_anthropic_format(self) -> bool:
         """Detect if the endpoint uses Anthropic format."""
         base = self.settings.LLM_BASE_URL.lower()
         # Kimi Code uses Anthropic format
@@ -80,7 +80,7 @@ class LLMClient:
         max_tokens = max_tokens or self.settings.COMPRESSION_MAX_TOKENS
         temperature = temperature if temperature is not None else self.settings.LLM_TEMPERATURE
 
-        if self._is_anthropic_format():
+        if self.is_anthropic_format():
             return await self._complete_anthropic(prompt, model, max_tokens, temperature)
         else:
             return await self._complete_openai(prompt, model, max_tokens, temperature, response_format)

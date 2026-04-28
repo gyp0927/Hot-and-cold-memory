@@ -88,9 +88,8 @@ class HotTier(BaseTier):
 
         # 3. Store metadata (new chunks start with max frequency)
         now = datetime.utcnow()
-        metadata_list = []
-        for chunk in chunks:
-            meta = ChunkMetadata(
+        metadata_list = [
+            ChunkMetadata(
                 chunk_id=chunk.chunk_id,
                 document_id=chunk.document_id,
                 tier=Tier.HOT,
@@ -102,8 +101,9 @@ class HotTier(BaseTier):
                 chunk_index=chunk.index,
                 tags=chunk.tags or [],
             )
-            metadata_list.append(meta)
-            await self.metadata_store.create_chunk(meta)
+            for chunk in chunks
+        ]
+        await self.metadata_store.create_chunks_batch(metadata_list)
 
         logger.info(
             "hot_tier_stored",
@@ -126,6 +126,13 @@ class HotTier(BaseTier):
             filters=filters,
         )
 
+        # Batch fetch metadata to avoid N+1 queries
+        chunk_ids = [r.chunk_id for r in results]
+        meta_map = {
+            m.chunk_id: m
+            for m in await self.metadata_store.get_chunks_batch(chunk_ids)
+        }
+
         chunks = []
         for result in results:
             chunk_id = result.chunk_id
@@ -145,9 +152,7 @@ class HotTier(BaseTier):
                 logger.warning("chunk_not_found", chunk_id=str(chunk_id))
                 continue
 
-            # Get metadata
-            meta = await self.metadata_store.get_chunk(chunk_id)
-
+            meta = meta_map.get(chunk_id)
             chunks.append(RetrievedChunk(
                 chunk_id=chunk_id,
                 document_id=uuid.UUID(result.payload.get("document_id")) if result.payload else uuid.UUID(int=0),

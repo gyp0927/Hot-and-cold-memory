@@ -101,9 +101,8 @@ class ColdTier(BaseTier):
 
         # 5. Store metadata
         now = datetime.utcnow()
-        metadata_list = []
-        for chunk, comp in zip(chunks, compressed):
-            meta = ChunkMetadata(
+        metadata_list = [
+            ChunkMetadata(
                 chunk_id=chunk.chunk_id,
                 document_id=chunk.document_id,
                 tier=Tier.COLD,
@@ -116,8 +115,9 @@ class ColdTier(BaseTier):
                 chunk_index=chunk.index,
                 tags=chunk.tags or [],
             )
-            metadata_list.append(meta)
-            await self.metadata_store.create_chunk(meta)
+            for chunk, comp in zip(chunks, compressed)
+        ]
+        await self.metadata_store.create_chunks_batch(metadata_list)
 
         logger.info(
             "cold_tier_stored",
@@ -176,9 +176,8 @@ class ColdTier(BaseTier):
 
         # 3. Store metadata
         now = datetime.utcnow()
-        metadata_list = []
-        for chunk in chunks:
-            meta = ChunkMetadata(
+        metadata_list = [
+            ChunkMetadata(
                 chunk_id=chunk.chunk_id,
                 document_id=chunk.document_id,
                 tier=Tier.COLD,
@@ -191,8 +190,9 @@ class ColdTier(BaseTier):
                 chunk_index=chunk.index,
                 tags=chunk.tags or [],
             )
-            metadata_list.append(meta)
-            await self.metadata_store.create_chunk(meta)
+            for chunk in chunks
+        ]
+        await self.metadata_store.create_chunks_batch(metadata_list)
 
         logger.info(
             "cold_tier_raw_stored",
@@ -223,6 +223,13 @@ class ColdTier(BaseTier):
             filters=filters,
         )
 
+        # Batch fetch metadata to avoid N+1 queries
+        chunk_ids = [r.chunk_id for r in results]
+        meta_map = {
+            m.chunk_id: m
+            for m in await self.metadata_store.get_chunks_batch(chunk_ids)
+        }
+
         chunks = []
         for result in results:
             chunk_id = result.chunk_id
@@ -248,7 +255,7 @@ class ColdTier(BaseTier):
                 text = await self.decompression_engine.decompress(text)
                 is_decompressed = True
 
-            meta = await self.metadata_store.get_chunk(chunk_id)
+            meta = meta_map.get(chunk_id)
 
             chunks.append(RetrievedChunk(
                 chunk_id=chunk_id,

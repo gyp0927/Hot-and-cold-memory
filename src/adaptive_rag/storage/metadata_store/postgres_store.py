@@ -145,6 +145,47 @@ class PostgresMetadataStore(BaseMetadataStore):
             model = result.scalar_one_or_none()
             return _chunk_to_metadata(model) if model else None
 
+    async def get_chunks_batch(self, chunk_ids: list[uuid.UUID]) -> list[ChunkMetadata]:
+        """Get multiple chunks by ID in a single query."""
+        if not chunk_ids:
+            return []
+        id_strs = [_to_uuid_str(cid) for cid in chunk_ids]
+        async with self.async_session() as session:
+            result = await session.execute(
+                select(ChunkModel).where(ChunkModel.chunk_id.in_(id_strs))
+            )
+            models = result.scalars().all()
+            return [_chunk_to_metadata(m) for m in models]
+
+    async def create_chunks_batch(self, metadatas: list[ChunkMetadata]) -> None:
+        """Create multiple chunk records in a single transaction."""
+        if not metadatas:
+            return
+        async with self.async_session() as session:
+            models = [
+                ChunkModel(
+                    chunk_id=_to_uuid_str(m.chunk_id),
+                    document_id=_to_uuid_str(m.document_id),
+                    tier=m.tier.value,
+                    original_length=m.original_length,
+                    compressed_length=m.compressed_length,
+                    chunk_index=m.chunk_index,
+                    access_count=m.access_count,
+                    frequency_score=m.frequency_score,
+                    created_at=m.created_at,
+                    updated_at=m.updated_at,
+                    last_accessed_at=m.last_accessed_at,
+                    last_migrated_at=m.last_migrated_at,
+                    topic_cluster_id=_to_uuid_str(m.topic_cluster_id) if m.topic_cluster_id else None,
+                    tags=m.tags,
+                    attributes=m.attributes,
+                    vector_id=m.vector_id,
+                )
+                for m in metadatas
+            ]
+            session.add_all(models)
+            await session.commit()
+
     async def update_chunk(
         self,
         chunk_id: uuid.UUID,
@@ -177,6 +218,15 @@ class PostgresMetadataStore(BaseMetadataStore):
             )
             await session.commit()
             return result.rowcount or 0
+
+    async def count_chunks_by_tier(self, tier: Tier) -> int:
+        """Count chunks in a given tier."""
+        async with self.async_session() as session:
+            from sqlalchemy import func
+            result = await session.execute(
+                select(func.count(ChunkModel.chunk_id)).where(ChunkModel.tier == tier.value)
+            )
+            return result.scalar() or 0
 
     async def query_chunks_by_tier_and_score(
         self,

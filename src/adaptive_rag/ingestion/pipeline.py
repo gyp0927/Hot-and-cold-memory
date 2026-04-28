@@ -271,26 +271,22 @@ class IngestionPipeline:
     async def _enforce_hot_tier_capacity(self) -> None:
         """If hot tier exceeds capacity, evict the coldest chunks to cold tier."""
         try:
-            # Count all hot chunks via metadata store
-            all_hot = await self.metadata_store.query_chunks_by_tier_and_score(
-                tier=Tier.HOT,
-                limit=self.HOT_TIER_CAPACITY + 1,
-            )
-            if len(all_hot) > self.HOT_TIER_CAPACITY:
+            hot_count = await self.metadata_store.count_chunks_by_tier(tier=Tier.HOT)
+            if hot_count > self.HOT_TIER_CAPACITY:
                 if self.migration_engine is not None:
                     evicted = await self.migration_engine.evict_coldest(
                         percent=self.EVICT_PERCENT
                     )
                     logger.warning(
                         "hot_tier_capacity_exceeded",
-                        hot_count=len(all_hot),
+                        hot_count=hot_count,
                         capacity=self.HOT_TIER_CAPACITY,
                         evicted=len(evicted),
                     )
                 else:
                     logger.warning(
                         "hot_tier_capacity_exceeded_no_migration_engine",
-                        hot_count=len(all_hot),
+                        hot_count=hot_count,
                         capacity=self.HOT_TIER_CAPACITY,
                     )
         except Exception as e:

@@ -109,7 +109,7 @@ class FrequencyTracker:
             query_embedding,
         )
         if not cluster:
-            return 0.0  # Unknown topic -> default to hot tier
+            return 0.0  # Unknown topic -> routed to cold tier (freq <= HOT_TO_COLD_THRESHOLD)
 
         return self.decay_engine.apply_decay(
             base_score=cluster.frequency_score,

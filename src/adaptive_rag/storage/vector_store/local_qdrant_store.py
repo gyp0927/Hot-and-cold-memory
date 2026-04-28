@@ -25,6 +25,22 @@ from .base import BaseVectorStore, VectorSearchResult
 logger = get_logger(__name__)
 
 
+def _parse_uuid(value: Any) -> uuid.UUID:
+    """Safely parse a Qdrant point ID into a UUID.
+
+    Qdrant may return IDs as strings (UUIDs) or integers.
+    This helper handles both cases gracefully.
+    """
+    if isinstance(value, uuid.UUID):
+        return value
+    if isinstance(value, str):
+        return uuid.UUID(value)
+    if isinstance(value, int):
+        return uuid.UUID(int=value)
+    # Fallback: try string conversion
+    return uuid.UUID(str(value))
+
+
 class LocalQdrantStore(BaseVectorStore):
     """Local file-based Qdrant store (no server required)."""
 
@@ -131,7 +147,7 @@ class LocalQdrantStore(BaseVectorStore):
 
         return [
             VectorSearchResult(
-                chunk_id=uuid.UUID(r.id) if isinstance(r.id, str) else uuid.UUID(int=r.id),
+                chunk_id=_parse_uuid(r.id),
                 score=r.score,
                 vector=None,
                 payload=r.payload or {},
@@ -179,7 +195,7 @@ class LocalQdrantStore(BaseVectorStore):
 
         r = results[0]
         return VectorSearchResult(
-            chunk_id=uuid.UUID(r.id) if isinstance(r.id, str) else uuid.UUID(int=r.id),
+            chunk_id=_parse_uuid(r.id),
             score=1.0,
             vector=r.vector,
             payload=r.payload or {},

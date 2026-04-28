@@ -3,6 +3,7 @@
 import asyncio
 from dataclasses import dataclass
 from typing import Any
+import uuid
 
 from adaptive_rag.core.config import Tier, RoutingStrategy, get_settings
 from adaptive_rag.core.logging import get_logger
@@ -50,6 +51,22 @@ class FrequencyRouter:
         self.frequency_tracker = frequency_tracker
         self.embedder = embedder or Embedder()
         self.ranker = ResultRanker()
+
+    async def _record_access_safe(
+        self,
+        chunk_ids: list[uuid.UUID],
+        query_text: str,
+        query_embedding: list[float],
+    ) -> None:
+        """Fire-and-forget access recording with exception swallowing."""
+        try:
+            await self.frequency_tracker.record_access(
+                chunk_ids=chunk_ids,
+                query_text=query_text,
+                query_embedding=query_embedding,
+            )
+        except Exception as e:
+            logger.warning("record_access_failed", error=str(e))
 
     async def route(
         self,
@@ -138,9 +155,9 @@ class FrequencyRouter:
             hot_results, cold_results, top_k
         )
 
-        # Record access async (fire-and-forget)
+        # Record access async (fire-and-forget, exceptions swallowed)
         asyncio.create_task(
-            self.frequency_tracker.record_access(
+            self._record_access_safe(
                 chunk_ids=[c.chunk_id for c in merged],
                 query_text=query_text,
                 query_embedding=query_embedding,
