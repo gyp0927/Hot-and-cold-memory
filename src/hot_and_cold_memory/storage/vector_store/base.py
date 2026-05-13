@@ -10,7 +10,7 @@ from typing import Any
 class VectorSearchResult:
     """Result from a vector search."""
 
-    chunk_id: uuid.UUID
+    memory_id: uuid.UUID
     score: float
     vector: list[float] | None = None
     payload: dict[str, Any] | None = None
@@ -72,7 +72,7 @@ class BaseVectorStore(ABC):
     async def get_by_id(
         self,
         collection: str,
-        chunk_id: uuid.UUID,
+        memory_id: uuid.UUID,
     ) -> VectorSearchResult | None:
         """Get a vector by ID."""
         pass

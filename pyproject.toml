@@ -92,7 +92,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 
 [tool.coverage.run]
-source = ["src/adaptive_memory"]
+source = ["src/hot_and_cold_memory"]
 
 [build-system]
 requires = ["hatchling"]

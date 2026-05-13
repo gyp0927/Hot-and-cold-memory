@@ -1,13 +1,13 @@
 """Custom exception hierarchy."""
 
 
-class AdaptiveRAGError(Exception):
-    """Base exception for all adaptive RAG errors."""
+class AdaptiveMemoryError(Exception):
+    """Base exception for all adaptive memory errors."""
 
     pass
 
 
-class StorageError(AdaptiveRAGError):
+class StorageError(AdaptiveMemoryError):
     """Storage layer failure."""
 
     pass
@@ -37,49 +37,49 @@ class CacheError(StorageError):
     pass
 
 
-class CompressionError(AdaptiveRAGError):
+class CompressionError(AdaptiveMemoryError):
     """LLM compression failed."""
 
     pass
 
 
-class DecompressionError(AdaptiveRAGError):
+class DecompressionError(AdaptiveMemoryError):
     """LLM decompression failed."""
 
     pass
 
 
-class MigrationError(AdaptiveRAGError):
+class MigrationError(AdaptiveMemoryError):
     """Tier migration failed."""
 
     pass
 
 
-class TierError(AdaptiveRAGError):
+class TierError(AdaptiveMemoryError):
     """Tier operation failed."""
 
     pass
 
 
-class RoutingError(AdaptiveRAGError):
+class RoutingError(AdaptiveMemoryError):
     """Query routing failed."""
 
     pass
 
 
-class IngestionError(AdaptiveRAGError):
+class IngestionError(AdaptiveMemoryError):
     """Document ingestion failed."""
 
     pass
 
 
-class ChunkNotFoundError(AdaptiveRAGError):
+class ChunkNotFoundError(AdaptiveMemoryError):
     """Requested chunk not found."""
 
     pass
 
 
-class ClusterNotFoundError(AdaptiveRAGError):
+class ClusterNotFoundError(AdaptiveMemoryError):
     """Query cluster not found."""
 
     pass

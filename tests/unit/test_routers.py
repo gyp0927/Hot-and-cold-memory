@@ -25,7 +25,7 @@ class TestRetrieveRouter:
         mock_result.cold_results_count = 0
         mock_result.total_latency_ms = 10.0
         mock_result.topic_frequency = 0.5
-        mock_retriever.retrieve = AsyncMock(return_value=mock_result)
+        mock_retriever.query = AsyncMock(return_value=mock_result)
         retrieve.set_retriever(mock_retriever)
         return TestClient(app)
 

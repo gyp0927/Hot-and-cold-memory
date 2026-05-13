@@ -60,14 +60,14 @@ class FrequencyRouter:
 
     async def _record_access_safe(
         self,
-        chunk_ids: list[uuid.UUID],
+        memory_ids: list[uuid.UUID],
         query_text: str,
         query_embedding: list[float],
     ) -> None:
         """Fire-and-forget access recording with exception swallowing."""
         try:
             await self.frequency_tracker.record_access(
-                chunk_ids=chunk_ids,
+                memory_ids=memory_ids,
                 query_text=query_text,
                 query_embedding=query_embedding,
             )
@@ -166,7 +166,7 @@ class FrequencyRouter:
         # Record access async (fire-and-forget, exceptions swallowed)
         task = asyncio.create_task(
             self._record_access_safe(
-                chunk_ids=[c.chunk_id for c in merged],
+                memory_ids=[c.memory_id for c in merged],
                 query_text=query_text,
                 query_embedding=query_embedding,
             )

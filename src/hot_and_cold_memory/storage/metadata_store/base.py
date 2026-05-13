@@ -157,6 +157,15 @@ class BaseMetadataStore(ABC):
         pass
 
     @abstractmethod
+    async def count_memories(
+        self,
+        memory_type: str | None = None,
+        source: str | None = None,
+    ) -> int:
+        """Count memories with optional filtering."""
+        pass
+
+    @abstractmethod
     async def count_memories_by_tier(self, tier: Tier) -> int:
         """Count memories in a given tier."""
         pass

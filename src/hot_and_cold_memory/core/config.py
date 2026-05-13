@@ -87,9 +87,9 @@ class Settings(BaseSettings):
     CACHE_URL: str | None = None
     CACHE_TTL_SECONDS: int = 300
 
-    # Memory Store (replaces document store)
+    # Document Store
     MEMORY_STORE_TYPE: Literal["local"] = "local"
-    MEMORY_STORE_PATH: str = "./data/memories"
+    DOCUMENT_STORE_PATH: str = "./data/memories"
 
     # Tier Configuration
     COLD_TIER_COMPRESSION_RATIO: float = 0.2

@@ -254,6 +254,22 @@ class PostgresMetadataStore(BaseMetadataStore):
             models = result.scalars().all()
             return [_memory_to_item(m) for m in models]
 
+    async def count_memories(
+        self,
+        memory_type: str | None = None,
+        source: str | None = None,
+    ) -> int:
+        """Count memories with optional filtering."""
+        async with self.async_session() as session:
+            from sqlalchemy import func
+            stmt = select(func.count(MemoryModel.memory_id))
+            if memory_type:
+                stmt = stmt.where(MemoryModel.memory_type == memory_type)
+            if source:
+                stmt = stmt.where(MemoryModel.source == source)
+            result = await session.execute(stmt)
+            return result.scalar() or 0
+
     async def count_memories_by_tier(self, tier: Tier) -> int:
         """Count memories in a given tier."""
         async with self.async_session() as session:

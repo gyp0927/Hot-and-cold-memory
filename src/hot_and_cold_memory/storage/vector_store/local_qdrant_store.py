@@ -147,7 +147,7 @@ class LocalQdrantStore(BaseVectorStore):
 
         return [
             VectorSearchResult(
-                chunk_id=_parse_uuid(r.id),
+                memory_id=_parse_uuid(r.id),
                 score=r.score,
                 vector=None,
                 payload=r.payload or {},
@@ -176,7 +176,7 @@ class LocalQdrantStore(BaseVectorStore):
     async def get_by_id(
         self,
         collection: str,
-        chunk_id: uuid.UUID,
+        memory_id: uuid.UUID,
     ) -> VectorSearchResult | None:
         """Get a vector by ID."""
         if not self.client:
@@ -185,7 +185,7 @@ class LocalQdrantStore(BaseVectorStore):
         results = await asyncio.to_thread(
             self.client.retrieve,
             collection_name=collection,
-            ids=[str(chunk_id)],
+            ids=[str(memory_id)],
             with_payload=True,
             with_vectors=True,
         )
@@ -195,7 +195,7 @@ class LocalQdrantStore(BaseVectorStore):
 
         r = results[0]
         return VectorSearchResult(
-            chunk_id=_parse_uuid(r.id),
+            memory_id=_parse_uuid(r.id),
             score=1.0,
             vector=r.vector,
             payload=r.payload or {},

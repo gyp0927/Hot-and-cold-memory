@@ -110,7 +110,7 @@ class QdrantVectorStore(BaseVectorStore):
 
         return [
             VectorSearchResult(
-                chunk_id=uuid.UUID(r.id),
+                memory_id=uuid.UUID(r.id),
                 score=r.score,
                 vector=None,
                 payload=r.payload or {},
@@ -138,7 +138,7 @@ class QdrantVectorStore(BaseVectorStore):
     async def get_by_id(
         self,
         collection: str,
-        chunk_id: uuid.UUID,
+        memory_id: uuid.UUID,
     ) -> VectorSearchResult | None:
         """Get a vector by ID."""
         if not self.client:
@@ -146,7 +146,7 @@ class QdrantVectorStore(BaseVectorStore):
 
         results = await self.client.retrieve(
             collection_name=collection,
-            ids=[str(chunk_id)],
+            ids=[str(memory_id)],
             with_payload=True,
             with_vectors=True,
         )
@@ -156,7 +156,7 @@ class QdrantVectorStore(BaseVectorStore):
 
         r = results[0]
         return VectorSearchResult(
-            chunk_id=uuid.UUID(r.id),
+            memory_id=uuid.UUID(r.id),
             score=1.0,
             vector=r.vector,
             payload=r.payload or {},
@@ -203,7 +203,7 @@ class QdrantVectorStore(BaseVectorStore):
         return [
             [
                 VectorSearchResult(
-                    chunk_id=uuid.UUID(r.id),
+                    memory_id=uuid.UUID(r.id),
                     score=r.score,
                     vector=None,
                     payload=r.payload or {},

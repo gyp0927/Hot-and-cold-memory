@@ -78,6 +78,10 @@ async def list_memories(
         limit=limit,
         offset=offset,
     )
+    total = await _metadata_store.count_memories(
+        memory_type=memory_type,
+        source=source,
+    )
     return MemoryListResponse(
         memories=[
             MemoryDetailResponse(
@@ -94,7 +98,7 @@ async def list_memories(
             )
             for m in memories
         ],
-        total=len(memories),
+        total=total,
     )
 
 

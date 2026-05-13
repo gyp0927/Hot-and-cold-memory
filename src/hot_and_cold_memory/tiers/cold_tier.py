@@ -18,6 +18,7 @@ from hot_and_cold_memory.storage.vector_store.base import BaseVectorStore
 
 from .base import BaseTier, MemoryEntry, RetrievedMemory
 from .compression import CompressionEngine
+from .decompression import DecompressionEngine
 
 logger = get_logger(__name__)
 
@@ -34,6 +35,7 @@ class ColdTier(BaseTier):
         metadata_store: BaseMetadataStore,
         document_store: BaseDocumentStore,
         compression_engine: CompressionEngine,
+        decompression_engine: DecompressionEngine | None = None,
         cache: BaseCache | None = None,
         embedder: Embedder | None = None,
     ) -> None:
@@ -42,6 +44,7 @@ class ColdTier(BaseTier):
         self.metadata_store = metadata_store
         self.document_store = document_store
         self.compression_engine = compression_engine
+        self.decompression_engine = decompression_engine or DecompressionEngine(embedder)
         self.cache = cache
         self.embedder = embedder or Embedder()
         self.collection = f"{self.settings.VECTOR_DB_COLLECTION}_cold"
@@ -204,6 +207,7 @@ class ColdTier(BaseTier):
         query_embedding: list[float],
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
+        decompress: bool = False,
     ) -> list[RetrievedMemory]:
         """Retrieve memories from cold tier.
 
@@ -211,6 +215,7 @@ class ColdTier(BaseTier):
             query_embedding: Query embedding vector.
             top_k: Number of results.
             filters: Optional metadata filters.
+            decompress: If True, decompress summaries back to full text.
         """
         results = await self.vector_store.search(
             collection=self.collection,
@@ -245,13 +250,22 @@ class ColdTier(BaseTier):
                 continue
 
             meta = meta_map.get(memory_id)
+            is_decompressed = False
+
+            # Decompress if requested
+            if decompress:
+                try:
+                    text = await self.decompression_engine.decompress(text)
+                    is_decompressed = True
+                except Exception:
+                    logger.warning("decompress_failed", memory_id=str(memory_id))
 
             memories.append(RetrievedMemory(
                 memory_id=memory_id,
                 content=text,
                 score=result.score,
                 tier=Tier.COLD,
-                is_decompressed=False,
+                is_decompressed=is_decompressed,
                 access_count=meta.access_count if meta else 0,
                 frequency_score=meta.frequency_score if meta else 0.0,
                 memory_type=meta.memory_type if meta else "observation",

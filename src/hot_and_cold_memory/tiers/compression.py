@@ -123,7 +123,7 @@ Output a JSON array with one object per segment, in the same order:
             logger.debug(
                 "memory_compressed",
                 memory_id=str(memory.memory_id),
-                original_len=len(chunk.text),
+                original_len=len(memory.content),
                 compressed_len=len(summary),
                 ratio=compression_ratio,
             )
@@ -249,7 +249,7 @@ Output a JSON array with one object per segment, in the same order:
 
             logger.info(
                 "group_compressed",
-                chunk_count=len(chunks),
+                memory_count=len(memories),
                 avg_ratio=sum(c.compression_ratio for c in compressed_chunks) / len(compressed_chunks),
             )
             return compressed_chunks

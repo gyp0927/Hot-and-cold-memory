@@ -35,7 +35,7 @@ async def retrieve(request: RetrieveRequest) -> RetrieveResponse:
         if request.tier and request.tier != "both":
             tier = Tier(request.tier)
 
-        result = await _retriever.retrieve(
+        result = await _retriever.query(
             query_text=request.query,
             top_k=request.top_k,
             tier=tier,
