@@ -9,6 +9,8 @@ from hot_and_cold_memory.api.schemas.memory import (
     MemoryCreateResponse,
     MemoryDetailResponse,
     MemoryListResponse,
+    RelatedMemoriesResponse,
+    RelatedMemorySchema,
 )
 from hot_and_cold_memory.core.logging import get_logger
 from hot_and_cold_memory.ingestion.pipeline import MemoryPipeline
@@ -150,3 +152,39 @@ async def delete_memory(memory_id: str) -> dict:
     if not success:
         raise HTTPException(status_code=404, detail="Memory not found")
     return {"success": success}
+
+
+@router.get("/{memory_id}/related", response_model=RelatedMemoriesResponse)
+async def get_related_memories(
+    memory_id: str,
+    link_type: str | None = None,
+    limit: int = 20,
+) -> RelatedMemoriesResponse:
+    """Get memories associated with a given memory."""
+    if not _metadata_store:
+        raise HTTPException(status_code=503, detail="Metadata store not initialized")
+
+    try:
+        mid = uuid.UUID(memory_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid memory ID format") from exc
+
+    links = await _metadata_store.get_related_memories(
+        memory_id=mid,
+        link_type=link_type,
+        limit=limit,
+    )
+
+    return RelatedMemoriesResponse(
+        memory_id=mid,
+        related=[
+            RelatedMemorySchema(
+                memory_id=mem.memory_id,
+                content=mem.content,
+                tier=mem.tier.value,
+                link_type=link.link_type,
+                strength=link.strength,
+            )
+            for link, mem in links
+        ],
+    )

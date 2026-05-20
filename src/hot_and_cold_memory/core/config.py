@@ -156,6 +156,9 @@ class Settings(BaseSettings):
     CONSOLIDATION_MAX_PAIRS_PER_RUN: int = 10
     CONSOLIDATION_MIN_CONTENT_LENGTH: int = 20
 
+    # Association graph
+    ENABLE_ASSOCIATIONS: bool = True
+
 
 # Global settings instance
 _settings: Settings | None = None

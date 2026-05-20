@@ -46,3 +46,20 @@ class MemoryListResponse(BaseModel):
 
     memories: list[MemoryDetailResponse]
     total: int
+
+
+class RelatedMemorySchema(BaseModel):
+    """A related memory with link metadata."""
+
+    memory_id: uuid.UUID
+    content: str
+    tier: str
+    link_type: str
+    strength: float
+
+
+class RelatedMemoriesResponse(BaseModel):
+    """Related memories response."""
+
+    memory_id: uuid.UUID
+    related: list[RelatedMemorySchema]

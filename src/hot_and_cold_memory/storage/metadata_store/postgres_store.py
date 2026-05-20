@@ -14,12 +14,14 @@ from .base import (
     AccessLog,
     BaseMetadataStore,
     MemoryItem,
+    MemoryLink,
     MigrationLog,
     TopicCluster,
 )
 from .models import (
     AccessLogModel,
     Base,
+    MemoryLinkModel,
     MemoryModel,
     MigrationLogModel,
     TopicClusterModel,
@@ -558,3 +560,120 @@ class PostgresMetadataStore(BaseMetadataStore):
                 .values(**updates)
             )
             await session.commit()
+
+    # --- Association graph operations ---
+
+    async def create_link(self, link: MemoryLink) -> None:
+        """Create a link between two memories (upsert on duplicate)."""
+        async with self.async_session() as session:
+            # Check if reverse link already exists; if so, update strength
+            existing = await session.execute(
+                select(MemoryLinkModel)
+                .where(
+                    or_(
+                        and_(
+                            MemoryLinkModel.source_memory_id == _to_uuid_str(link.source_memory_id),
+                            MemoryLinkModel.target_memory_id == _to_uuid_str(link.target_memory_id),
+                        ),
+                        and_(
+                            MemoryLinkModel.source_memory_id == _to_uuid_str(link.target_memory_id),
+                            MemoryLinkModel.target_memory_id == _to_uuid_str(link.source_memory_id),
+                        ),
+                    )
+                )
+            )
+            model = existing.scalar_one_or_none()
+            if model:
+                model.strength += link.strength * 0.1
+                model.last_accessed_at = datetime.now(timezone.utc)
+            else:
+                model = MemoryLinkModel(
+                    source_memory_id=_to_uuid_str(link.source_memory_id),
+                    target_memory_id=_to_uuid_str(link.target_memory_id),
+                    link_type=link.link_type,
+                    strength=link.strength,
+                    created_at=link.created_at,
+                    last_accessed_at=link.last_accessed_at,
+                )
+                session.add(model)
+            await session.commit()
+
+    async def get_related_memories(
+        self,
+        memory_id: uuid.UUID,
+        link_type: str | None = None,
+        min_strength: float | None = None,
+        limit: int = 20,
+    ) -> list[tuple[MemoryLink, MemoryItem]]:
+        """Get memories related to a given memory."""
+        mid_str = _to_uuid_str(memory_id)
+        async with self.async_session() as session:
+            conditions = [
+                or_(
+                    MemoryLinkModel.source_memory_id == mid_str,
+                    MemoryLinkModel.target_memory_id == mid_str,
+                )
+            ]
+            if link_type:
+                conditions.append(MemoryLinkModel.link_type == link_type)
+            if min_strength is not None:
+                conditions.append(MemoryLinkModel.strength >= min_strength)
+
+            stmt = (
+                select(MemoryLinkModel)
+                .where(and_(*conditions))
+                .order_by(MemoryLinkModel.strength.desc())
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            link_models = result.scalars().all()
+
+            # Fetch target memory details
+            related_ids = []
+            for lm in link_models:
+                target = lm.target_memory_id if lm.source_memory_id == mid_str else lm.source_memory_id
+                related_ids.append(target)
+
+            if not related_ids:
+                return []
+
+            mem_result = await session.execute(
+                select(MemoryModel).where(MemoryModel.memory_id.in_(related_ids))
+            )
+            mem_map = {m.memory_id: m for m in mem_result.scalars().all()}
+
+            out: list[tuple[MemoryLink, MemoryItem]] = []
+            for lm in link_models:
+                target = lm.target_memory_id if lm.source_memory_id == mid_str else lm.source_memory_id
+                mem = mem_map.get(target)
+                if mem:
+                    out.append((
+                        MemoryLink(
+                            source_memory_id=uuid.UUID(lm.source_memory_id),
+                            target_memory_id=uuid.UUID(lm.target_memory_id),
+                            link_type=lm.link_type,
+                            strength=lm.strength,
+                            created_at=lm.created_at,
+                            last_accessed_at=lm.last_accessed_at,
+                            link_id=lm.link_id,
+                        ),
+                        _memory_to_item(mem),
+                    ))
+            return out
+
+    async def delete_links_for_memories(self, memory_ids: list[uuid.UUID]) -> int:
+        """Delete all links involving any of the given memory IDs."""
+        if not memory_ids:
+            return 0
+        id_strs = [_to_uuid_str(mid) for mid in memory_ids]
+        async with self.async_session() as session:
+            result = await session.execute(
+                delete(MemoryLinkModel).where(
+                    or_(
+                        MemoryLinkModel.source_memory_id.in_(id_strs),
+                        MemoryLinkModel.target_memory_id.in_(id_strs),
+                    )
+                )
+            )
+            await session.commit()
+            return result.rowcount or 0

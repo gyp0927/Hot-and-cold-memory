@@ -147,3 +147,32 @@ class MigrationLogModel(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class MemoryLinkModel(Base):
+    """Association/links between memories."""
+
+    __tablename__ = "memory_links"
+
+    link_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_memory_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("memories.memory_id", ondelete="CASCADE"), nullable=False
+    )
+    target_memory_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("memories.memory_id", ondelete="CASCADE"), nullable=False
+    )
+    link_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="coaccess", index=True
+    )
+    strength: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=func.now()
+    )
+    last_accessed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_memory_links_source_target", "source_memory_id", "target_memory_id"),
+        Index("ix_memory_links_target", "target_memory_id"),
+    )

@@ -8,7 +8,7 @@ from typing import Any
 from hot_and_cold_memory.core.config import get_settings
 from hot_and_cold_memory.core.logging import get_logger
 from hot_and_cold_memory.ingestion.embedder import Embedder
-from hot_and_cold_memory.storage.metadata_store.base import AccessLog, BaseMetadataStore, TopicCluster
+from hot_and_cold_memory.storage.metadata_store.base import AccessLog, BaseMetadataStore, MemoryLink, TopicCluster
 from hot_and_cold_memory.storage.vector_store.base import BaseVectorStore
 
 from .clustering import TopicClusterStore
@@ -89,11 +89,41 @@ class FrequencyTracker:
         ]
         await self.metadata_store.create_access_logs_batch(access_logs)
 
+        # Create coaccess links between memories retrieved together
+        if self.settings.ENABLE_ASSOCIATIONS and len(memory_ids) > 1:
+            await self._create_coaccess_links(memory_ids, timestamp)
+
         logger.debug(
             "access_recorded",
             memories=len(memory_ids),
             cluster_id=str(cluster_id),
         )
+
+    async def _create_coaccess_links(
+        self,
+        memory_ids: list[uuid.UUID],
+        timestamp: datetime,
+    ) -> None:
+        """Create coaccess links for all pairs of memories accessed together."""
+        for i in range(len(memory_ids)):
+            for j in range(i + 1, len(memory_ids)):
+                try:
+                    await self.metadata_store.create_link(
+                        MemoryLink(
+                            source_memory_id=memory_ids[i],
+                            target_memory_id=memory_ids[j],
+                            link_type="coaccess",
+                            strength=1.0,
+                            last_accessed_at=timestamp,
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "coaccess_link_failed",
+                        source=str(memory_ids[i]),
+                        target=str(memory_ids[j]),
+                        error=str(e),
+                    )
 
     async def get_frequency_score(self, memory_id: uuid.UUID) -> float:
         """Get the current (decayed) frequency score for a memory.

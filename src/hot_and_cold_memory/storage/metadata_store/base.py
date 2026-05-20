@@ -77,6 +77,19 @@ class MigrationLog:
     error_message: str | None = None
 
 
+@dataclass
+class MemoryLink:
+    """A link/association between two memories."""
+
+    source_memory_id: uuid.UUID
+    target_memory_id: uuid.UUID
+    link_type: str = "coaccess"
+    strength: float = 1.0
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_accessed_at: datetime | None = None
+    link_id: int | None = None
+
+
 class BaseMetadataStore(ABC):
     """Abstract interface for metadata database operations."""
 
@@ -280,6 +293,32 @@ class BaseMetadataStore(ABC):
         updates: dict[str, Any],
     ) -> None:
         """Update migration log."""
+        pass
+
+    # Association graph operations
+    @abstractmethod
+    async def create_link(self, link: MemoryLink) -> None:
+        """Create a link between two memories."""
+        pass
+
+    @abstractmethod
+    async def get_related_memories(
+        self,
+        memory_id: uuid.UUID,
+        link_type: str | None = None,
+        min_strength: float | None = None,
+        limit: int = 20,
+    ) -> list[tuple[MemoryLink, MemoryItem]]:
+        """Get memories related to a given memory.
+
+        Returns:
+            List of (link, memory_item) tuples.
+        """
+        pass
+
+    @abstractmethod
+    async def delete_links_for_memories(self, memory_ids: list[uuid.UUID]) -> int:
+        """Delete all links involving any of the given memory IDs."""
         pass
 
     @abstractmethod
