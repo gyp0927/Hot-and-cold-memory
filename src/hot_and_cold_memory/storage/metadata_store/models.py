@@ -57,14 +57,14 @@ class MemoryModel(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=func.now()
+        DateTime(timezone=True), nullable=False, default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now()
     )
-    last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_migrated_at: Mapped[datetime | None] = mapped_column(
-        DateTime, nullable=True
+        DateTime(timezone=True), nullable=True
     )
 
     topic_cluster_id: Mapped[str | None] = mapped_column(
@@ -93,10 +93,10 @@ class TopicClusterModel(Base):
     frequency_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     member_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=func.now()
+        DateTime(timezone=True), nullable=False, default=func.now()
     )
     last_accessed_at: Mapped[datetime | None] = mapped_column(
-        DateTime, nullable=True
+        DateTime(timezone=True), nullable=True
     )
     centroid: Mapped[list[float]] = mapped_column(JSON, nullable=False)
 
@@ -115,7 +115,7 @@ class AccessLogModel(Base):
     )
     query_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     retrieved_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=func.now()
+        DateTime(timezone=True), nullable=False, default=func.now()
     )
     response_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tier_accessed: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -135,8 +135,8 @@ class MigrationLogModel(Base):
     new_size: Mapped[int] = mapped_column(Integer, nullable=False)
     compression_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
     started_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=func.now()
+        DateTime(timezone=True), nullable=False, default=func.now()
     )
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

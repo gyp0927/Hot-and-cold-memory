@@ -83,6 +83,12 @@ class PostgresMetadataStore(BaseMetadataStore):
                 db_url,
                 echo=self.settings.DEBUG,
             )
+            from sqlalchemy import event
+            @event.listens_for(self.engine.sync_engine, "connect")
+            def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
         else:
             self.engine = create_async_engine(
                 db_url,

@@ -275,6 +275,9 @@ class TopicClusterStore:
 
         for cluster in all_clusters:
             last_active = cluster.last_accessed_at or cluster.created_at
+            # Normalize naive datetimes to UTC-aware before comparison
+            if last_active.tzinfo is None:
+                last_active = last_active.replace(tzinfo=timezone.utc)
             if last_active < stale_cutoff:
                 await self.delete_cluster(cluster.cluster_id)
                 deleted += 1

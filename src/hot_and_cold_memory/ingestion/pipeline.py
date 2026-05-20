@@ -201,24 +201,22 @@ class MemoryPipeline:
         from hot_and_cold_memory.tiers.base import MemoryEntry
 
         # Pre-validate and assign IDs
-        results: list[MemoryWriteResult] = []
+        result_map: dict[int, MemoryWriteResult] = {}
         valid_items: list[tuple[int, dict[str, Any], uuid.UUID]] = []
         for i, item in enumerate(items):
             mid = uuid.uuid4()
             content = item.get("content", "")
             if not content or not content.strip():
-                results.append(
-                    MemoryWriteResult(
-                        memory_id=mid,
-                        status="failed",
-                        error="Memory content is empty",
-                    )
+                result_map[i] = MemoryWriteResult(
+                    memory_id=mid,
+                    status="failed",
+                    error="Memory content is empty",
                 )
             else:
                 valid_items.append((i, item, mid))
 
         if not valid_items:
-            return results
+            return [result_map[i] for i, _ in enumerate(items)]
 
         # Batch generate embeddings
         contents = [item["content"] for _, item, _ in valid_items]
@@ -293,7 +291,6 @@ class MemoryPipeline:
             await self.metadata_store.update_memories_batch(importance_updates)
 
         # Build results
-        result_map: dict[int, MemoryWriteResult] = {}
         for orig_idx, entry, _, _meta in hot_entries:
             result_map[orig_idx] = MemoryWriteResult(
                 memory_id=entry.memory_id,

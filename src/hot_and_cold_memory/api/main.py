@@ -161,6 +161,15 @@ async def lifespan(app: FastAPI):
     # Graceful shutdown
     scheduler.stop()
 
+    # Drain background tasks
+    retriever = _services.get("retriever")
+    if retriever and hasattr(retriever, "drain_background_tasks"):
+        try:
+            await retriever.drain_background_tasks()
+            logger.info("background_tasks_drained")
+        except Exception as e:
+            logger.warning("drain_background_tasks_failed", error=str(e))
+
     # Close storage connections
     for name in ("vector_store", "metadata_store", "document_store", "cache"):
         store = _services.get(name)

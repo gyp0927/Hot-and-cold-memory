@@ -311,17 +311,24 @@ class MigrationEngine:
             # 3. Recreate metadata in cold tier
             from hot_and_cold_memory.storage.metadata_store.base import MemoryItem
             now = datetime.now(timezone.utc)
+            original_meta = await self.metadata_store.get_memory(record.memory_id)
             await self.metadata_store.create_memory(MemoryItem(
                 memory_id=record.memory_id,
                 tier=Tier.COLD,
                 content=compressed.summary_text,
                 original_length=len(record.content),
+                memory_type=original_meta.memory_type if original_meta else (record.memory_type or "observation"),
+                source=original_meta.source if original_meta else None,
+                importance=original_meta.importance if original_meta else 0.5,
                 access_count=record.access_count,
                 frequency_score=record.frequency_score,
-                created_at=now,
+                created_at=original_meta.created_at if original_meta else now,
                 updated_at=now,
+                last_accessed_at=original_meta.last_accessed_at if original_meta else None,
                 last_migrated_at=now,
+                topic_cluster_id=original_meta.topic_cluster_id if original_meta else None,
                 tags=record.metadata.get("tags", []) if record.metadata else [],
+                attributes=original_meta.attributes if original_meta else {},
             ))
 
             # 4. Remove from hot tier (vector, document, and metadata all deleted atomically)

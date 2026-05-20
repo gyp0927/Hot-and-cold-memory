@@ -272,13 +272,16 @@ class ColdTier(BaseTier):
                 metadata=result.payload or {},
             ))
 
-        # Track access for frequency scoring (defensive: also recorded by router)
-        if memory_ids:
-            await self.metadata_store.increment_access(
-                memory_ids=memory_ids,
-                cluster_id=None,
-                timestamp=datetime.now(timezone.utc),
-            )
+        # Track access for frequency scoring (best-effort, only for returned memories)
+        if memories:
+            try:
+                await self.metadata_store.increment_access(
+                    memory_ids=[m.memory_id for m in memories],
+                    cluster_id=None,
+                    timestamp=datetime.now(timezone.utc),
+                )
+            except Exception as exc:
+                logger.warning("cold_tier_access_tracking_failed", error=str(exc))
 
         return memories
 

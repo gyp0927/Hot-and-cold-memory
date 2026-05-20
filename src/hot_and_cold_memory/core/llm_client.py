@@ -25,10 +25,13 @@ class LLMClient:
     def is_anthropic_format(self) -> bool:
         """Detect if the endpoint uses Anthropic format."""
         from urllib.parse import urlparse
-        parsed = urlparse(self.settings.LLM_BASE_URL)
-        netloc = parsed.netloc.lower()
+        url = self.settings.LLM_BASE_URL
+        if "://" not in url:
+            url = "https://" + url
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").lower()
         # Kimi Code uses Anthropic format
-        if netloc.endswith(("kimi.com", "kimi.ai")) or "kimi" in netloc:
+        if hostname.endswith(("kimi.com", "kimi.ai")):
             return True
         return False
 

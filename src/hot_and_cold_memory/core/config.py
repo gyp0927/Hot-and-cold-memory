@@ -82,7 +82,7 @@ class Settings(BaseSettings):
 
     # Metadata Database (no default credentials — must be provided via env)
     METADATA_DB_URL: str = Field(
-        default="postgresql+asyncpg://memory:memory_password@localhost:5432/hot_and_cold_memory",
+        ...,
         repr=False,
     )
 

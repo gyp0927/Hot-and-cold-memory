@@ -96,6 +96,10 @@ class UnifiedRetriever:
         )
         self._cache = _TTLCache(ttl_seconds=5.0, maxsize=200)
 
+    async def drain_background_tasks(self) -> None:
+        """Wait for any pending background access-recording tasks."""
+        await self.router.drain_background_tasks()
+
     async def query(
         self,
         query_text: str,
