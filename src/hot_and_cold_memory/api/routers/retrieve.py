@@ -40,6 +40,7 @@ async def retrieve(request: RetrieveRequest) -> RetrieveResponse:
             top_k=request.top_k,
             tier=tier,
             filters=request.filters,
+            use_hybrid=request.use_hybrid,
         )
 
         return RetrieveResponse(

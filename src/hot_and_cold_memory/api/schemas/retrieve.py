@@ -19,6 +19,10 @@ class RetrieveRequest(BaseModel):
         default=None,
         description="Metadata filters.",
     )
+    use_hybrid: bool = Field(
+        default=False,
+        description="If True, fuse vector similarity with keyword search using RRF.",
+    )
 
 
 class RetrievedMemorySchema(BaseModel):

@@ -92,6 +92,7 @@ async def initialize_services() -> dict:
         cold_tier=cold_tier,
         frequency_tracker=frequency_tracker,
         embedder=embedder,
+        metadata_store=metadata_store,
     )
 
     # Migration

@@ -159,6 +159,25 @@ class BaseMetadataStore(ABC):
         pass
 
     @abstractmethod
+    async def search_by_keyword(
+        self,
+        query_text: str,
+        tier: Tier | None = None,
+        limit: int = 100,
+    ) -> list[MemoryItem]:
+        """Search memories by keyword match in content.
+
+        Args:
+            query_text: Space-separated keywords.
+            tier: Filter by tier (optional).
+            limit: Max results.
+
+        Returns:
+            Matching memory items ordered by relevance.
+        """
+        pass
+
+    @abstractmethod
     async def query_forgettable_memories(
         self,
         tier: Tier,

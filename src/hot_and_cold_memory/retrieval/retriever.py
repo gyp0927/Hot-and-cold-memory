@@ -9,6 +9,7 @@ from hot_and_cold_memory.core.config import Tier
 from hot_and_cold_memory.core.logging import get_logger
 from hot_and_cold_memory.frequency.tracker import FrequencyTracker
 from hot_and_cold_memory.ingestion.embedder import Embedder
+from hot_and_cold_memory.storage.metadata_store.base import BaseMetadataStore
 from hot_and_cold_memory.tiers.cold_tier import ColdTier
 from hot_and_cold_memory.tiers.hot_tier import HotTier
 
@@ -87,12 +88,14 @@ class UnifiedRetriever:
         cold_tier: ColdTier,
         frequency_tracker: FrequencyTracker,
         embedder: Embedder | None = None,
+        metadata_store: BaseMetadataStore | None = None,
     ) -> None:
         self.router = FrequencyRouter(
             hot_tier=hot_tier,
             cold_tier=cold_tier,
             frequency_tracker=frequency_tracker,
             embedder=embedder,
+            metadata_store=metadata_store,
         )
         self._cache = _TTLCache(ttl_seconds=5.0, maxsize=200)
 
@@ -107,6 +110,7 @@ class UnifiedRetriever:
         tier: Tier | None = None,
         decompress: bool = False,
         filters: dict[str, Any] | None = None,
+        use_hybrid: bool = False,
     ) -> RetrievalResult:
         """Execute a query and retrieve relevant chunks (with short-term cache).
 
@@ -116,6 +120,7 @@ class UnifiedRetriever:
             tier: Force specific tier.
             decompress: Decompress cold chunks.
             filters: Metadata filters.
+            use_hybrid: If True, fuse vector + keyword results with RRF.
 
         Returns:
             Retrieval result.
@@ -131,6 +136,7 @@ class UnifiedRetriever:
             tier_preference=tier,
             force_decompress=decompress,
             filters=filters,
+            use_hybrid=use_hybrid,
         )
         self._cache.set(query_text, top_k, tier, decompress, filters, result)
         return result

@@ -11,10 +11,12 @@ from hot_and_cold_memory.core.logging import get_logger
 from hot_and_cold_memory.frequency.tracker import FrequencyTracker
 from hot_and_cold_memory.ingestion.embedder import Embedder
 from hot_and_cold_memory.monitoring.metrics import QUERY_DURATION, QUERY_TOTAL
+from hot_and_cold_memory.storage.metadata_store.base import BaseMetadataStore
 from hot_and_cold_memory.tiers.base import RetrievedMemory
 from hot_and_cold_memory.tiers.cold_tier import ColdTier
 from hot_and_cold_memory.tiers.hot_tier import HotTier
 
+from .hybrid import HybridRanker
 from .ranker import ResultRanker
 
 logger = get_logger(__name__)
@@ -46,13 +48,16 @@ class FrequencyRouter:
         cold_tier: ColdTier,
         frequency_tracker: FrequencyTracker,
         embedder: Embedder | None = None,
+        metadata_store: BaseMetadataStore | None = None,
     ) -> None:
         self.settings = get_settings()
         self.hot_tier = hot_tier
         self.cold_tier = cold_tier
         self.frequency_tracker = frequency_tracker
         self.embedder = embedder or Embedder()
+        self.metadata_store = metadata_store
         self.ranker = ResultRanker()
+        self.hybrid_ranker = HybridRanker()
         self._background_tasks: set = set()
 
     async def drain_background_tasks(self) -> None:
@@ -85,6 +90,7 @@ class FrequencyRouter:
         tier_preference: Tier | None = None,
         force_decompress: bool = False,
         filters: dict[str, Any] | None = None,
+        use_hybrid: bool = False,
     ) -> RetrievalResult:
         """Route query to appropriate tier(s) and return merged results.
 
@@ -95,6 +101,7 @@ class FrequencyRouter:
             tier_preference: Force a specific tier.
             force_decompress: Decompress cold chunks.
             filters: Optional metadata filters.
+            use_hybrid: If True, also search by keyword and fuse with RRF.
 
         Returns:
             Retrieval result with routing information.
@@ -160,15 +167,31 @@ class FrequencyRouter:
             )
             hot_results, cold_results = await asyncio.gather(hot_task, cold_task)
 
-        # Merge and re-rank
-        merged = self.ranker.merge_and_rank(
+        # Merge and re-rank (vector results)
+        vector_merged = self.ranker.merge_and_rank(
             hot_results, cold_results, top_k
         )
+
+        # Hybrid search: fuse with keyword results
+        final_chunks = vector_merged
+        if use_hybrid and self.settings.ENABLE_HYBRID_SEARCH and self.metadata_store:
+            keyword_items = await self.metadata_store.search_by_keyword(
+                query_text=query_text,
+                limit=top_k * 2,
+            )
+            keyword_results = [
+                (item.memory_id, item.content) for item in keyword_items
+            ]
+            final_chunks = self.hybrid_ranker.fuse(
+                vector_results=vector_merged,
+                keyword_results=keyword_results,
+                top_k=top_k,
+            )
 
         # Record access async (fire-and-forget, exceptions swallowed)
         task = asyncio.create_task(
             self._record_access_safe(
-                memory_ids=[c.memory_id for c in merged],
+                memory_ids=[c.memory_id for c in final_chunks],
                 query_text=query_text,
                 query_embedding=query_embedding,
             )
@@ -187,12 +210,13 @@ class FrequencyRouter:
             strategy=strategy.value,
             hot_count=len(hot_results),
             cold_count=len(cold_results),
-            merged_count=len(merged),
+            merged_count=len(final_chunks),
+            hybrid=use_hybrid,
             latency_ms=elapsed_ms,
         )
 
         return RetrievalResult(
-            chunks=merged,
+            chunks=final_chunks,
             routing_strategy=strategy,
             hot_results_count=len(hot_results),
             cold_results_count=len(cold_results),

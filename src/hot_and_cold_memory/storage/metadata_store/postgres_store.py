@@ -303,6 +303,28 @@ class PostgresMetadataStore(BaseMetadataStore):
             )
             return result.scalar() or 0
 
+    async def search_by_keyword(
+        self,
+        query_text: str,
+        tier: Tier | None = None,
+        limit: int = 100,
+    ) -> list[MemoryItem]:
+        """Search memories by keyword match in content (cross-db compatible)."""
+        async with self.async_session() as session:
+            conditions = []
+            if tier is not None:
+                conditions.append(MemoryModel.tier == tier.value)
+
+            # Split query into terms and require each term to match somewhere
+            terms = [t.strip() for t in query_text.split() if t.strip()]
+            for term in terms:
+                conditions.append(MemoryModel.content.ilike(f"%{term}%"))
+
+            stmt = select(MemoryModel).where(and_(*conditions)).limit(limit)
+            result = await session.execute(stmt)
+            models = result.scalars().all()
+            return [_memory_to_item(m) for m in models]
+
     async def close(self) -> None:
         """Dispose the database engine."""
         await self.engine.dispose()

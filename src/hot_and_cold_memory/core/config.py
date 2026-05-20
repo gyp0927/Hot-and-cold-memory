@@ -145,6 +145,10 @@ class Settings(BaseSettings):
     FORGET_MIN_DAYS_SINCE_ACCESS: int = 30
     FORGET_BATCH_SIZE: int = 100
 
+    # Hybrid Search
+    ENABLE_HYBRID_SEARCH: bool = True
+    HYBRID_RRF_K: int = 60
+
 
 # Global settings instance
 _settings: Settings | None = None
