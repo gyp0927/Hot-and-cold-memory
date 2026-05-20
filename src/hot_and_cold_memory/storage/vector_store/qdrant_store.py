@@ -170,6 +170,12 @@ class QdrantVectorStore(BaseVectorStore):
         result = await self.client.count(collection_name=collection)
         return result.count
 
+    async def close(self) -> None:
+        """Close Qdrant client."""
+        if self.client:
+            await self.client.close()
+            self.client = None
+
     async def search_batch(
         self,
         collection: str,

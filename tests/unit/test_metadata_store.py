@@ -1,7 +1,7 @@
 """Unit tests for metadata store."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -94,7 +94,7 @@ class TestPostgresMetadataStore:
         await metadata_store.increment_access(
             memory_ids=memory_ids,
             cluster_id=None,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         for mid in memory_ids:

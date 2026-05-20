@@ -4,7 +4,7 @@ Recent accesses weighted higher; old accesses fade over time.
 """
 
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 
 from hot_and_cold_memory.core.config import get_settings
 
@@ -12,10 +12,28 @@ from hot_and_cold_memory.core.config import get_settings
 class DecayEngine:
     """Implements exponential time decay for frequency scores."""
 
+    # Normalization denominator for log1p(access_count) in min_score
+    _ACCESS_LOG_DENOMINATOR: float = 6.0
+    # Score ceiling for normalization in compute_score
+    _SCORE_CEILING: float = 10.0
+    # Weights for compute_score components
+    _ACCESS_WEIGHT: float = 0.4
+    _RECENCY_WEIGHT: float = 0.3
+    _CLUSTER_WEIGHT: float = 0.3
+    # Recency multiplier to keep it in comparable range with access_component
+    _RECENCY_MULTIPLIER: float = 10.0
+
     def __init__(self) -> None:
         settings = get_settings()
         self.half_life_seconds = settings.DECAY_HALF_LIFE_HOURS * 3600
         self.decay_constant = math.log(2) / self.half_life_seconds
+
+    @staticmethod
+    def _to_aware(dt: datetime) -> datetime:
+        """Ensure a datetime is timezone-aware (naive assumed UTC)."""
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
 
     def apply_decay(
         self,
@@ -36,11 +54,11 @@ class DecayEngine:
         if last_accessed is None:
             return base_score
 
-        elapsed = (datetime.utcnow() - last_accessed).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self._to_aware(last_accessed)).total_seconds()
         decay_factor = math.exp(-self.decay_constant * elapsed)
 
         # Score decays but never below a minimum based on total accesses
-        min_score = math.log1p(access_count) / 6.0
+        min_score = math.log1p(access_count) / self._ACCESS_LOG_DENOMINATOR
 
         return max(base_score * decay_factor, min_score)
 
@@ -48,7 +66,6 @@ class DecayEngine:
         self,
         access_count: int,
         last_accessed: datetime | None,
-        created_at: datetime,
         cluster_score: float,
     ) -> float:
         """Compute composite frequency score.
@@ -72,7 +89,7 @@ class DecayEngine:
 
         # Recency component (higher = more recent)
         if last_accessed:
-            age_seconds = (datetime.utcnow() - last_accessed).total_seconds()
+            age_seconds = (datetime.now(timezone.utc) - self._to_aware(last_accessed)).total_seconds()
             recency = math.exp(-self.decay_constant * age_seconds)
         else:
             recency = 0.0
@@ -82,10 +99,10 @@ class DecayEngine:
 
         # Weighted combination
         score = (
-            0.4 * access_component +
-            0.3 * recency * 10 +
-            0.3 * cluster_component
+            self._ACCESS_WEIGHT * access_component +
+            self._RECENCY_WEIGHT * recency * self._RECENCY_MULTIPLIER +
+            self._CLUSTER_WEIGHT * cluster_component
         )
 
         # Normalize to [0, 1]
-        return min(score / 10.0, 1.0)
+        return min(score / self._SCORE_CEILING, 1.0)

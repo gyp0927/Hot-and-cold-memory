@@ -49,3 +49,20 @@ class MemoryCache(BaseCache):
         """Clear all cached data."""
         self._data.clear()
         self._expires.clear()
+
+    async def initialize(self) -> None:
+        """No-op for in-memory cache."""
+        pass
+
+    async def close(self) -> None:
+        """No-op for in-memory cache."""
+        pass
+
+    async def mget(self, keys: list[str]) -> list[Any | None]:
+        """Get multiple values."""
+        return [await self.get(k) for k in keys]
+
+    async def mset(self, items: dict[str, Any], ttl: int | None = None) -> None:
+        """Set multiple values."""
+        for key, value in items.items():
+            await self.set(key, value, ttl)

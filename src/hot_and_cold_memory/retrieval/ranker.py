@@ -28,54 +28,31 @@ class ResultRanker:
         Returns:
             Merged and ranked results.
         """
+        import dataclasses
+
         # Apply tier-specific score adjustments
         adjusted_hot = [
-            RetrievedMemory(
-                memory_id=r.memory_id,
-                content=r.content,
-                score=r.score * 1.05,  # Slight boost for hot tier
-                tier=r.tier,
-                is_decompressed=r.is_decompressed,
-                access_count=r.access_count,
-                frequency_score=r.frequency_score,
-                memory_type=r.memory_type,
-                embedding=r.embedding,
-                metadata=r.metadata,
-            )
+            dataclasses.replace(r, score=r.score * 1.05)  # Slight boost for hot tier
             for r in hot_results
         ]
 
         # Cold tier summaries may have lower semantic similarity
-        # so we keep their scores as-is
         adjusted_cold = [
-            RetrievedMemory(
-                memory_id=r.memory_id,
-                content=r.content,
-                score=r.score * 0.95,  # Slight penalty for summaries
-                tier=r.tier,
-                is_decompressed=r.is_decompressed,
-                access_count=r.access_count,
-                frequency_score=r.frequency_score,
-                memory_type=r.memory_type,
-                embedding=r.embedding,
-                metadata=r.metadata,
-            )
+            dataclasses.replace(r, score=r.score * 0.95)  # Slight penalty for summaries
             for r in cold_results
         ]
 
-        # Merge and sort by adjusted score
-        all_results = adjusted_hot + adjusted_cold
-        all_results.sort(key=lambda r: r.score, reverse=True)
+        # Deduplicate before sorting: pick hot over cold if same ID appears in both
+        merged_by_id: dict = {}
+        for r in adjusted_hot + adjusted_cold:
+            if r.memory_id not in merged_by_id:
+                merged_by_id[r.memory_id] = r
+            else:
+                # Keep the higher adjusted score
+                if r.score > merged_by_id[r.memory_id].score:
+                    merged_by_id[r.memory_id] = r
 
-        # Remove duplicates (same memory might appear in both tiers)
-        # Build an index for O(1) lookup instead of O(n) scan
-        original_by_id = {r.memory_id: r for r in hot_results + cold_results}
-        seen: set = set()
-        deduped = []
-        for r in all_results:
-            if r.memory_id not in seen:
-                seen.add(r.memory_id)
-                # Restore original score from the actual result
-                deduped.append(original_by_id.get(r.memory_id, r))
+        # Sort by adjusted score and truncate
+        deduped = sorted(merged_by_id.values(), key=lambda r: r.score, reverse=True)
 
         return deduped[:top_k]

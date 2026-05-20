@@ -1,10 +1,10 @@
 """Metadata store implementation using SQLAlchemy async (PostgreSQL/SQLite)."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import and_, delete, select, update
+from sqlalchemy import and_, case, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from hot_and_cold_memory.core.config import Tier, get_settings
@@ -83,6 +83,12 @@ class PostgresMetadataStore(BaseMetadataStore):
                 db_url,
                 echo=self.settings.DEBUG,
             )
+            from sqlalchemy import event
+            @event.listens_for(self.engine.sync_engine, "connect")
+            def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
         else:
             self.engine = create_async_engine(
                 db_url,
@@ -191,16 +197,13 @@ class PostgresMetadataStore(BaseMetadataStore):
             if "tier" in updates and isinstance(updates["tier"], Tier):
                 updates["tier"] = updates["tier"].value
 
-            await session.execute(
+            result = await session.execute(
                 update(MemoryModel)
                 .where(MemoryModel.memory_id == _to_uuid_str(memory_id))
-                .values(**updates, updated_at=datetime.utcnow())
+                .values(**updates, updated_at=datetime.now(timezone.utc))
+                .returning(MemoryModel)
             )
             await session.commit()
-
-            result = await session.execute(
-                select(MemoryModel).where(MemoryModel.memory_id == _to_uuid_str(memory_id))
-            )
             model = result.scalar_one_or_none()
             return _memory_to_item(model) if model else None
 
@@ -208,20 +211,37 @@ class PostgresMetadataStore(BaseMetadataStore):
         self,
         updates: dict[uuid.UUID, dict[str, Any]],
     ) -> None:
-        """Update multiple memories in a single transaction."""
+        """Update multiple memories in a single transaction using one UPDATE with CASE."""
         if not updates:
             return
         async with self.async_session() as session:
-            for memory_id, memory_updates in updates.items():
-                upd = dict(memory_updates)
-                if "tier" in upd and isinstance(upd["tier"], Tier):
-                    upd["tier"] = upd["tier"].value
-                upd["updated_at"] = datetime.utcnow()
-                await session.execute(
-                    update(MemoryModel)
-                    .where(MemoryModel.memory_id == _to_uuid_str(memory_id))
-                    .values(**upd)
-                )
+            id_strs = [_to_uuid_str(mid) for mid in updates]
+
+            # Collect all columns being updated
+            all_columns: set[str] = set()
+            for upd in updates.values():
+                all_columns.update(upd.keys())
+
+            values_to_set: dict[str, Any] = {"updated_at": datetime.now(timezone.utc)}
+
+            for col in all_columns:
+                col_attr = getattr(MemoryModel, col)
+                whens: list[tuple[Any, Any]] = []
+                for mid, upd in updates.items():
+                    if col not in upd:
+                        continue
+                    val = upd[col]
+                    if col == "tier" and isinstance(val, Tier):
+                        val = val.value
+                    whens.append((MemoryModel.memory_id == _to_uuid_str(mid), val))
+                if whens:
+                    values_to_set[col] = case(*whens, else_=col_attr)
+
+            await session.execute(
+                update(MemoryModel)
+                .where(MemoryModel.memory_id.in_(id_strs))
+                .values(**values_to_set)
+            )
             await session.commit()
 
     async def delete_memories(self, memory_ids: list[uuid.UUID]) -> int:
@@ -261,7 +281,6 @@ class PostgresMetadataStore(BaseMetadataStore):
     ) -> int:
         """Count memories with optional filtering."""
         async with self.async_session() as session:
-            from sqlalchemy import func
             stmt = select(func.count(MemoryModel.memory_id))
             if memory_type:
                 stmt = stmt.where(MemoryModel.memory_type == memory_type)
@@ -273,11 +292,14 @@ class PostgresMetadataStore(BaseMetadataStore):
     async def count_memories_by_tier(self, tier: Tier) -> int:
         """Count memories in a given tier."""
         async with self.async_session() as session:
-            from sqlalchemy import func
             result = await session.execute(
                 select(func.count(MemoryModel.memory_id)).where(MemoryModel.tier == tier.value)
             )
             return result.scalar() or 0
+
+    async def close(self) -> None:
+        """Dispose the database engine."""
+        await self.engine.dispose()
 
     async def query_memories_by_tier_and_score(
         self,
@@ -423,6 +445,25 @@ class PostgresMetadataStore(BaseMetadataStore):
                 tier_accessed=log.tier_accessed,
             )
             session.add(model)
+            await session.commit()
+
+    async def create_access_logs_batch(self, logs: list[AccessLog]) -> None:
+        """Create multiple access log entries in a single transaction."""
+        if not logs:
+            return
+        async with self.async_session() as session:
+            models = [
+                AccessLogModel(
+                    memory_id=_to_uuid_str(log.memory_id),
+                    query_cluster_id=_to_uuid_str(log.query_cluster_id) if log.query_cluster_id else None,
+                    query_text=log.query_text,
+                    retrieved_at=log.retrieved_at,
+                    response_time_ms=log.response_time_ms,
+                    tier_accessed=log.tier_accessed,
+                )
+                for log in logs
+            ]
+            session.add_all(models)
             await session.commit()
 
     async def create_migration_log(self, log: MigrationLog) -> None:

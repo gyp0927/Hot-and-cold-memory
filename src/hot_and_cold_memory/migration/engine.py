@@ -3,7 +3,8 @@
 import asyncio
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any
 
 from hot_and_cold_memory.core.config import Tier, get_settings
 from hot_and_cold_memory.core.exceptions import ChunkNotFoundError, MigrationError
@@ -12,7 +13,6 @@ from hot_and_cold_memory.ingestion.embedder import Embedder
 from hot_and_cold_memory.monitoring.metrics import MIGRATION_DURATION, MIGRATION_TOTAL
 from hot_and_cold_memory.storage.metadata_store.base import (
     BaseMetadataStore,
-    MemoryItem,
     MigrationLog,
 )
 from hot_and_cold_memory.tiers.base import MemoryEntry, RetrievedMemory
@@ -114,7 +114,7 @@ class MigrationEngine:
         start_time = time.time()
 
         report = MigrationReport(
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
 
         async with self._lock:
@@ -143,8 +143,8 @@ class MigrationEngine:
             if hot_candidates:
                 batch_results = await self._migrate_hot_to_cold_batch(hot_candidates)
                 for result in batch_results:
-                    if isinstance(result, Exception):
-                        report.errors.append(str(result))
+                    if not result.success:
+                        report.errors.append(result.error or "Unknown error")
                     else:
                         report.hot_to_cold.append(result)
 
@@ -165,7 +165,7 @@ class MigrationEngine:
                 else:
                     report.cold_to_hot.append(result)
 
-        report.completed_at = datetime.utcnow()
+        report.completed_at = datetime.now(timezone.utc)
         report.total_processed = len(report.hot_to_cold) + len(report.cold_to_hot)
 
         # Prometheus metrics
@@ -188,7 +188,7 @@ class MigrationEngine:
     async def _migrate_hot_to_cold_batch(
         self,
         memory_ids: list[uuid.UUID],
-    ) -> list[MigrationResult | Exception]:
+    ) -> list[MigrationResult]:
         """Migrate a batch of memories hot->cold using grouped LLM compression.
 
         Compresses up to ``COMPRESSION_BATCH_SIZE`` memories per LLM call to drive
@@ -200,13 +200,29 @@ class MigrationEngine:
         ], return_exceptions=True)
 
         valid_pairs: list[tuple[uuid.UUID, RetrievedMemory]] = []
-        results: list[MigrationResult | Exception] = []
+        results: list[MigrationResult] = []
         for mid, record in zip(memory_ids, memory_records):
             if isinstance(record, Exception):
-                results.append(MigrationError(f"Hot fetch failed for {mid}: {record}"))
+                results.append(MigrationResult(
+                    memory_id=mid,
+                    direction="hot_to_cold",
+                    original_size=0,
+                    new_size=0,
+                    compression_ratio=0.0,
+                    success=False,
+                    error=f"Hot fetch failed: {record}",
+                ))
                 continue
             if record is None:
-                results.append(ChunkNotFoundError(f"Memory {mid} not found in hot tier"))
+                results.append(MigrationResult(
+                    memory_id=mid,
+                    direction="hot_to_cold",
+                    original_size=0,
+                    new_size=0,
+                    compression_ratio=0.0,
+                    success=False,
+                    error=f"Memory {mid} not found in hot tier",
+                ))
                 continue
             valid_pairs.append((mid, record))
 
@@ -229,7 +245,15 @@ class MigrationEngine:
                 compressed_list = await compression_engine.compress_group(memories_for_llm)
             except Exception as e:
                 for mid, _ in group:
-                    results.append(MigrationError(f"Hot->cold batch compress failed for {mid}: {e}"))
+                    results.append(MigrationResult(
+                        memory_id=mid,
+                        direction="hot_to_cold",
+                        original_size=0,
+                        new_size=0,
+                        compression_ratio=0.0,
+                        success=False,
+                        error=f"Hot->cold batch compress failed: {e}",
+                    ))
                 continue
 
             # Persist each compressed result
@@ -238,7 +262,15 @@ class MigrationEngine:
                     result = await self._persist_hot_to_cold(record, compressed)
                     results.append(result)
                 except Exception as e:
-                    results.append(MigrationError(f"Hot->cold persist failed for {mid}: {e}"))
+                    results.append(MigrationResult(
+                        memory_id=mid,
+                        direction="hot_to_cold",
+                        original_size=0,
+                        new_size=0,
+                        compression_ratio=0.0,
+                        success=False,
+                        error=f"Hot->cold persist failed: {e}",
+                    ))
 
         return results
 
@@ -253,17 +285,14 @@ class MigrationEngine:
             direction="hot_to_cold",
             original_size=len(record.content),
             new_size=len(compressed.summary_text),
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
 
         try:
             # 1. Embed the summary so cold tier search uses the summary's vector
             summary_embedding = await self.embedder.embed(compressed.summary_text)
 
-            # 2. Drop existing metadata to avoid PK conflicts when re-inserting
-            await self.metadata_store.delete_memories([record.memory_id])
-
-            # 3. Write to cold tier stores directly using the precomputed summary
+            # 2. Write to cold tier stores first (never delete source until target is confirmed)
             await self.cold_tier.document_store.store_batch([
                 (record.memory_id, compressed.summary_text)
             ])
@@ -279,28 +308,35 @@ class MigrationEngine:
                 }],
             )
 
-            # 4. Recreate metadata in cold tier
+            # 3. Recreate metadata in cold tier
             from hot_and_cold_memory.storage.metadata_store.base import MemoryItem
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
+            original_meta = await self.metadata_store.get_memory(record.memory_id)
             await self.metadata_store.create_memory(MemoryItem(
                 memory_id=record.memory_id,
                 tier=Tier.COLD,
                 content=compressed.summary_text,
                 original_length=len(record.content),
+                memory_type=original_meta.memory_type if original_meta else (record.memory_type or "observation"),
+                source=original_meta.source if original_meta else None,
+                importance=original_meta.importance if original_meta else 0.5,
                 access_count=record.access_count,
                 frequency_score=record.frequency_score,
-                created_at=now,
+                created_at=original_meta.created_at if original_meta else now,
                 updated_at=now,
+                last_accessed_at=original_meta.last_accessed_at if original_meta else None,
                 last_migrated_at=now,
+                topic_cluster_id=original_meta.topic_cluster_id if original_meta else None,
                 tags=record.metadata.get("tags", []) if record.metadata else [],
+                attributes=original_meta.attributes if original_meta else {},
             ))
 
-            # 5. Remove from hot tier
+            # 4. Remove from hot tier (vector, document, and metadata all deleted atomically)
             await self.hot_tier.delete([record.memory_id])
 
             ratio = len(compressed.summary_text) / max(len(record.content), 1)
             log.compression_ratio = ratio
-            log.completed_at = datetime.utcnow()
+            log.completed_at = datetime.now(timezone.utc)
             log.status = "success"
             await self.metadata_store.create_migration_log(log)
 
@@ -322,7 +358,7 @@ class MigrationEngine:
         except Exception as e:
             log.status = "failed"
             log.error_message = str(e)
-            log.completed_at = datetime.utcnow()
+            log.completed_at = datetime.now(timezone.utc)
             await self.metadata_store.create_migration_log(log)
             raise MigrationError(f"Hot to cold persist failed for {record.memory_id}: {e}") from e
 
@@ -343,7 +379,7 @@ class MigrationEngine:
             direction="hot_to_cold",
             original_size=0,
             new_size=0,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
 
         try:
@@ -352,10 +388,7 @@ class MigrationEngine:
             if not memory:
                 raise ChunkNotFoundError(f"Memory {memory_id} not found in hot tier")
 
-            # 2. Delete old metadata first (avoid unique constraint)
-            await self.metadata_store.delete_memories([memory_id])
-
-            # 3. Store in cold tier (compresses automatically)
+            # 2. Store in cold tier first (compresses automatically)
             await self.cold_tier.store_memories(
                 memories=[MemoryEntry(
                     memory_id=memory.memory_id,
@@ -364,20 +397,20 @@ class MigrationEngine:
                 )],
             )
 
-            # 4. Delete from hot tier
+            # 3. Delete from hot tier (includes metadata deletion)
             await self.hot_tier.delete([memory_id])
 
-            # 5. Get compressed info
+            # 4. Get compressed info
             meta = await self.metadata_store.get_memory(memory_id)
             original_size = len(memory.content)
             new_size = len(meta.content) if meta else original_size
             ratio = new_size / original_size if original_size > 0 else 1.0
 
-            # 6. Log migration
+            # 5. Log migration
             log.original_size = original_size
             log.new_size = new_size
             log.compression_ratio = ratio
-            log.completed_at = datetime.utcnow()
+            log.completed_at = datetime.now(timezone.utc)
             log.status = "success"
             await self.metadata_store.create_migration_log(log)
 
@@ -400,7 +433,7 @@ class MigrationEngine:
         except Exception as e:
             log.status = "failed"
             log.error_message = str(e)
-            log.completed_at = datetime.utcnow()
+            log.completed_at = datetime.now(timezone.utc)
             await self.metadata_store.create_migration_log(log)
             raise MigrationError(f"Hot to cold migration failed for {memory_id}: {e}") from e
 
@@ -437,8 +470,7 @@ class MigrationEngine:
             count=len(ids_to_evict),
             percent=percent,
         )
-        raw_results = await self._migrate_hot_to_cold_batch(ids_to_evict)
-        return [r for r in raw_results if isinstance(r, MigrationResult)]
+        return await self._migrate_hot_to_cold_batch(ids_to_evict)
 
     async def _migrate_cold_to_hot(self, memory_id: uuid.UUID) -> MigrationResult:
         """Migrate a memory from cold to hot tier.
@@ -454,7 +486,7 @@ class MigrationEngine:
             direction="cold_to_hot",
             original_size=0,
             new_size=0,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
 
         try:
@@ -472,10 +504,7 @@ class MigrationEngine:
             # 3. Generate embedding
             embedding = await self.embedder.embed(decompressed)
 
-            # 4. Delete old metadata first (avoid unique constraint)
-            await self.metadata_store.delete_memories([memory_id])
-
-            # 5. Store in hot tier
+            # 4. Store in hot tier
             await self.hot_tier.store_memories(
                 memories=[MemoryEntry(
                     memory_id=memory.memory_id,
@@ -485,14 +514,14 @@ class MigrationEngine:
                 embeddings=[embedding],
             )
 
-            # 6. Delete from cold tier
+            # 5. Delete from cold tier (includes metadata deletion)
             await self.cold_tier.delete([memory_id])
 
             # 6. Log migration
             log.original_size = len(summary)
             log.new_size = len(decompressed)
             log.compression_ratio = len(summary) / len(decompressed) if len(decompressed) > 0 else 1.0
-            log.completed_at = datetime.utcnow()
+            log.completed_at = datetime.now(timezone.utc)
             log.status = "success"
             await self.metadata_store.create_migration_log(log)
 
@@ -514,7 +543,7 @@ class MigrationEngine:
         except Exception as e:
             log.status = "failed"
             log.error_message = str(e)
-            log.completed_at = datetime.utcnow()
+            log.completed_at = datetime.now(timezone.utc)
             await self.metadata_store.create_migration_log(log)
             raise MigrationError(f"Cold to hot migration failed for {memory_id}: {e}") from e
 

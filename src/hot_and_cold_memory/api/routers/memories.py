@@ -56,9 +56,11 @@ async def create_memory(request: MemoryCreateRequest) -> MemoryCreateResponse:
             tier=result.tier,
             message=result.error or "Memory written successfully",
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("create_memory_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal memory creation error") from e
 
 
 @router.get("", response_model=MemoryListResponse)
@@ -68,6 +70,8 @@ async def list_memories(
     limit: int = 100,
     offset: int = 0,
 ) -> MemoryListResponse:
+    if limit > 1000:
+        limit = 1000
     """List memories with optional filtering."""
     if not _metadata_store:
         raise HTTPException(status_code=503, detail="Metadata store not initialized")
@@ -110,8 +114,8 @@ async def get_memory(memory_id: str) -> MemoryDetailResponse:
 
     try:
         mid = uuid.UUID(memory_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid memory ID format")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid memory ID format") from exc
 
     m = await _metadata_store.get_memory(mid)
     if not m:
@@ -139,8 +143,10 @@ async def delete_memory(memory_id: str) -> dict:
 
     try:
         mid = uuid.UUID(memory_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid memory ID format")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid memory ID format") from exc
 
     success = await _pipeline.delete_memory(mid)
+    if not success:
+        raise HTTPException(status_code=404, detail="Memory not found")
     return {"success": success}

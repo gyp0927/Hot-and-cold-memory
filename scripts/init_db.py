@@ -6,9 +6,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from adaptive_rag.storage.metadata_store.postgres_store import PostgresMetadataStore
-from adaptive_rag.storage.vector_store.local_qdrant_store import LocalQdrantStore
-from adaptive_rag.core.logging import setup_logging
+from hot_and_cold_memory.storage.metadata_store.postgres_store import PostgresMetadataStore
+from hot_and_cold_memory.storage.vector_store.local_qdrant_store import LocalQdrantStore
+from hot_and_cold_memory.core.logging import setup_logging
 
 
 async def init_db() -> None:

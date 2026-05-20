@@ -31,3 +31,23 @@ class BaseCache(ABC):
     async def flush(self) -> None:
         """Clear all cached data."""
         pass
+
+    @abstractmethod
+    async def initialize(self) -> None:
+        """Initialize cache connection."""
+        pass
+
+    @abstractmethod
+    async def close(self) -> None:
+        """Close cache connection."""
+        pass
+
+    @abstractmethod
+    async def mget(self, keys: list[str]) -> list[Any | None]:
+        """Get multiple values in a single round-trip."""
+        pass
+
+    @abstractmethod
+    async def mset(self, items: dict[str, Any], ttl: int | None = None) -> None:
+        """Set multiple values in a single round-trip."""
+        pass

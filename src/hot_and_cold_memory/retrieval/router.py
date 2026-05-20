@@ -1,14 +1,14 @@
 """Frequency-driven query router."""
 
 import asyncio
+import time
 import uuid
-import weakref
 from dataclasses import dataclass
 from typing import Any
 
 from hot_and_cold_memory.core.config import RoutingStrategy, Tier, get_settings
 from hot_and_cold_memory.core.logging import get_logger
-from hot_and_cold_memory.frequency.tracker import FrequencyTracker, TopicFrequencyInfo
+from hot_and_cold_memory.frequency.tracker import FrequencyTracker
 from hot_and_cold_memory.ingestion.embedder import Embedder
 from hot_and_cold_memory.monitoring.metrics import QUERY_DURATION, QUERY_TOTAL
 from hot_and_cold_memory.tiers.base import RetrievedMemory
@@ -32,10 +32,6 @@ class RetrievalResult:
     topic_frequency: float
 
 
-# Keep references to fire-and-forget background tasks to prevent GC
-_background_tasks: weakref.WeakSet = weakref.WeakSet()
-
-
 class FrequencyRouter:
     """Routes queries to appropriate tier(s) based on topic frequency.
 
@@ -57,6 +53,13 @@ class FrequencyRouter:
         self.frequency_tracker = frequency_tracker
         self.embedder = embedder or Embedder()
         self.ranker = ResultRanker()
+        self._background_tasks: set = set()
+
+    async def drain_background_tasks(self) -> None:
+        """Wait for all pending background tasks to complete."""
+        if self._background_tasks:
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+            self._background_tasks.clear()
 
     async def _record_access_safe(
         self,
@@ -96,7 +99,6 @@ class FrequencyRouter:
         Returns:
             Retrieval result with routing information.
         """
-        import time
         start_time = time.time()
 
         # Generate embedding if not provided
@@ -171,7 +173,8 @@ class FrequencyRouter:
                 query_embedding=query_embedding,
             )
         )
-        _background_tasks.add(task)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
         elapsed_ms = (time.time() - start_time) * 1000
 

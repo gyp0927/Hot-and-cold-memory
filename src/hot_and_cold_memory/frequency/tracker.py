@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from hot_and_cold_memory.core.config import get_settings
@@ -57,7 +57,7 @@ class FrequencyTracker:
             query_text: Original query text.
             query_embedding: Pre-computed query embedding (optional).
         """
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
 
         # 1. Get or create query cluster
         cluster_id = await self._get_or_create_cluster(
@@ -77,16 +77,17 @@ class FrequencyTracker:
         # 4. Recalculate frequency scores
         await self._recalculate_scores(memory_ids, timestamp)
 
-        # 5. Log access for each memory
-        for memory_id in memory_ids:
-            await self.metadata_store.create_access_log(
-                AccessLog(
-                    memory_id=memory_id,
-                    query_cluster_id=cluster_id,
-                    query_text=query_text,
-                    retrieved_at=timestamp,
-                )
+        # 5. Batch log access
+        access_logs = [
+            AccessLog(
+                memory_id=memory_id,
+                query_cluster_id=cluster_id,
+                query_text=query_text,
+                retrieved_at=timestamp,
             )
+            for memory_id in memory_ids
+        ]
+        await self.metadata_store.create_access_logs_batch(access_logs)
 
         logger.debug(
             "access_recorded",
@@ -205,7 +206,7 @@ class FrequencyTracker:
             access_count=0,
             frequency_score=0.0,
             member_count=1,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             last_accessed_at=None,
         )
         await self.cluster_store.create_cluster(new_cluster)
@@ -254,7 +255,6 @@ class FrequencyTracker:
             new_score = self.decay_engine.compute_score(
                 access_count=metadata.access_count,
                 last_accessed=metadata.last_accessed_at,
-                created_at=metadata.created_at,
                 cluster_score=cluster_score,
             )
             batch_updates[memory_id] = {
