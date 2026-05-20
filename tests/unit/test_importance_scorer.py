@@ -37,7 +37,7 @@ class TestImportanceScorer:
         monkeypatch.setattr(_config, "_settings", None)
 
         class FakeLLM:
-            def complete_sync(self, prompt, **kwargs):
+            async def complete(self, prompt, **kwargs):
                 return "85"
 
         return ImportanceScorer(llm_client=FakeLLM())
@@ -119,10 +119,10 @@ class TestImportanceScorer:
 
     @pytest.mark.asyncio
     async def test_llm_fallback_for_ambiguous(self, llm_scorer):
-        # Content that produces ambiguous (~0.5) rule score triggers LLM
-        content = "用户最近有点累，看起来需要休息，但还在坚持完成手头的工作任务"
+        # Content with medium length and no keywords -> rule score ~0.5 (ambiguous band)
+        content = "用户最近的工作进度总体上保持稳定，没有出现特别大的波动"
         score = await llm_scorer.score(content)
-        # FakeLLM returns 85 -> 0.85, blended with rule ~0.55
+        # FakeLLM returns 85 -> 0.85, blended with rule ~0.5: 0.5*0.6 + 0.85*0.4 = 0.64
         assert score > 0.55
 
     @pytest.mark.asyncio

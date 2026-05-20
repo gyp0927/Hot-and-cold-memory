@@ -158,7 +158,7 @@ class ImportanceScorer:
         """Check if a score is in the ambiguous band where LLM help is useful."""
         return abs(score - 0.5) < self._llm_threshold
 
-    def _llm_score(self, content: str) -> float:
+    async def _llm_score(self, content: str) -> float:
         """Ask a lightweight LLM to rate importance 0-100, then normalize."""
         if not self._llm:
             return 0.5
@@ -172,7 +172,7 @@ class ImportanceScorer:
             f"Memory: \"{content[:500]}\"\n\n"
             "Reply with ONLY a number between 0 and 100, no explanation."
         )
-        response = self._llm.complete_sync(prompt, max_tokens=10, temperature=0.0)
+        response = await self._llm.complete(prompt, max_tokens=10, temperature=0.0)
         # Extract first number from response
         match = re.search(r"\b(\d{1,3})\b", response.strip())
         if match:
