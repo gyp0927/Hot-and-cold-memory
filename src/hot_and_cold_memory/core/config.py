@@ -149,6 +149,13 @@ class Settings(BaseSettings):
     ENABLE_HYBRID_SEARCH: bool = True
     HYBRID_RRF_K: int = 60
 
+    # Consolidation (deduplication + merging)
+    ENABLE_CONSOLIDATION: bool = True
+    CONSOLIDATION_SIMILARITY_THRESHOLD: float = 0.92
+    CONSOLIDATION_BATCH_SIZE: int = 50
+    CONSOLIDATION_MAX_PAIRS_PER_RUN: int = 10
+    CONSOLIDATION_MIN_CONTENT_LENGTH: int = 20
+
 
 # Global settings instance
 _settings: Settings | None = None
