@@ -253,23 +253,33 @@ class MemoryPipeline:
             else:
                 cold_entries.append((orig_idx, entry, embedding, meta))
 
-        # Batch store hot
+        # Batch store hot, grouped by (memory_type, source) to preserve per-item metadata
         if hot_entries:
-            await self.hot_tier.store_memories(
-                memories=[e for _, e, _, _ in hot_entries],
-                embeddings=[emb for _, _, emb, _ in hot_entries],
-                memory_type=hot_entries[0][3]["memory_type"],
-                source=hot_entries[0][3]["source"],
-            )
-        # Batch store cold
+            hot_groups: dict[tuple[str, str | None], list[tuple[int, Any, list[float], dict[str, Any]]]] = {}
+            for orig_idx, entry, embedding, meta in hot_entries:
+                key = (meta["memory_type"], meta["source"])
+                hot_groups.setdefault(key, []).append((orig_idx, entry, embedding, meta))
+            for (mtype, src), group in hot_groups.items():
+                await self.hot_tier.store_memories(
+                    memories=[e for _, e, _, _ in group],
+                    embeddings=[emb for _, _, emb, _ in group],
+                    memory_type=mtype,
+                    source=src,
+                )
+        # Batch store cold, grouped by (memory_type, source)
         if cold_entries:
-            await self.cold_tier.store_raw_memories(
-                memories=[e for _, e, _, _ in cold_entries],
-                embeddings=[emb for _, _, emb, _ in cold_entries],
-                memory_type=cold_entries[0][3]["memory_type"],
-                source=cold_entries[0][3]["source"],
-                initial_score=0.1,
-            )
+            cold_groups: dict[tuple[str, str | None], list[tuple[int, Any, list[float], dict[str, Any]]]] = {}
+            for orig_idx, entry, embedding, meta in cold_entries:
+                key = (meta["memory_type"], meta["source"])
+                cold_groups.setdefault(key, []).append((orig_idx, entry, embedding, meta))
+            for (mtype, src), group in cold_groups.items():
+                await self.cold_tier.store_raw_memories(
+                    memories=[e for _, e, _, _ in group],
+                    embeddings=[emb for _, _, emb, _ in group],
+                    memory_type=mtype,
+                    source=src,
+                    initial_score=0.1,
+                )
 
         # Update importances that differ from default
         importance_updates: dict[uuid.UUID, dict[str, Any]] = {}

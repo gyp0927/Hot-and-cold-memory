@@ -39,14 +39,14 @@ A memory system for AI agents. Like human memory, it has **short-term** (hot) an
 
 ```bash
 # 1. Install
-pip install -e ".[dev]"
+pip install -e "."
 
 # 2. Configure
 cp .env.example .env
 # Edit .env and add your OpenAI API key
 
 # 3. Start
-python -m adaptive_memory.api.main
+python -m hot_and_cold_memory.api.main
 ```
 
 Service runs at `http://localhost:8000`

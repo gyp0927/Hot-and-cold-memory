@@ -27,8 +27,7 @@ class TestCompression:
         assert len(comp.key_entities) == 2
         assert comp.compression_ratio == 0.25
 
-    @pytest.mark.asyncio
-    async def test_compression_engine_parse_json_response(self):
+    def test_compression_engine_parse_json_response(self):
         """Test JSON response parsing."""
         engine = CompressionEngine()
 

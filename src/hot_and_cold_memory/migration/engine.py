@@ -143,8 +143,8 @@ class MigrationEngine:
             if hot_candidates:
                 batch_results = await self._migrate_hot_to_cold_batch(hot_candidates)
                 for result in batch_results:
-                    if isinstance(result, Exception):
-                        report.errors.append(str(result))
+                    if not result.success:
+                        report.errors.append(result.error or "Unknown error")
                     else:
                         report.hot_to_cold.append(result)
 
@@ -188,7 +188,7 @@ class MigrationEngine:
     async def _migrate_hot_to_cold_batch(
         self,
         memory_ids: list[uuid.UUID],
-    ) -> list[MigrationResult | Exception]:
+    ) -> list[MigrationResult]:
         """Migrate a batch of memories hot->cold using grouped LLM compression.
 
         Compresses up to ``COMPRESSION_BATCH_SIZE`` memories per LLM call to drive
@@ -200,13 +200,29 @@ class MigrationEngine:
         ], return_exceptions=True)
 
         valid_pairs: list[tuple[uuid.UUID, RetrievedMemory]] = []
-        results: list[MigrationResult | Exception] = []
+        results: list[MigrationResult] = []
         for mid, record in zip(memory_ids, memory_records):
             if isinstance(record, Exception):
-                results.append(MigrationError(f"Hot fetch failed for {mid}: {record}"))
+                results.append(MigrationResult(
+                    memory_id=mid,
+                    direction="hot_to_cold",
+                    original_size=0,
+                    new_size=0,
+                    compression_ratio=0.0,
+                    success=False,
+                    error=f"Hot fetch failed: {record}",
+                ))
                 continue
             if record is None:
-                results.append(ChunkNotFoundError(f"Memory {mid} not found in hot tier"))
+                results.append(MigrationResult(
+                    memory_id=mid,
+                    direction="hot_to_cold",
+                    original_size=0,
+                    new_size=0,
+                    compression_ratio=0.0,
+                    success=False,
+                    error=f"Memory {mid} not found in hot tier",
+                ))
                 continue
             valid_pairs.append((mid, record))
 
@@ -229,7 +245,15 @@ class MigrationEngine:
                 compressed_list = await compression_engine.compress_group(memories_for_llm)
             except Exception as e:
                 for mid, _ in group:
-                    results.append(MigrationError(f"Hot->cold batch compress failed for {mid}: {e}"))
+                    results.append(MigrationResult(
+                        memory_id=mid,
+                        direction="hot_to_cold",
+                        original_size=0,
+                        new_size=0,
+                        compression_ratio=0.0,
+                        success=False,
+                        error=f"Hot->cold batch compress failed: {e}",
+                    ))
                 continue
 
             # Persist each compressed result
@@ -238,7 +262,15 @@ class MigrationEngine:
                     result = await self._persist_hot_to_cold(record, compressed)
                     results.append(result)
                 except Exception as e:
-                    results.append(MigrationError(f"Hot->cold persist failed for {mid}: {e}"))
+                    results.append(MigrationResult(
+                        memory_id=mid,
+                        direction="hot_to_cold",
+                        original_size=0,
+                        new_size=0,
+                        compression_ratio=0.0,
+                        success=False,
+                        error=f"Hot->cold persist failed: {e}",
+                    ))
 
         return results
 
@@ -361,13 +393,13 @@ class MigrationEngine:
             # 3. Delete from hot tier (includes metadata deletion)
             await self.hot_tier.delete([memory_id])
 
-            # 5. Get compressed info
+            # 4. Get compressed info
             meta = await self.metadata_store.get_memory(memory_id)
             original_size = len(memory.content)
             new_size = len(meta.content) if meta else original_size
             ratio = new_size / original_size if original_size > 0 else 1.0
 
-            # 6. Log migration
+            # 5. Log migration
             log.original_size = original_size
             log.new_size = new_size
             log.compression_ratio = ratio
@@ -431,8 +463,7 @@ class MigrationEngine:
             count=len(ids_to_evict),
             percent=percent,
         )
-        raw_results = await self._migrate_hot_to_cold_batch(ids_to_evict)
-        return [r for r in raw_results if isinstance(r, MigrationResult)]
+        return await self._migrate_hot_to_cold_batch(ids_to_evict)
 
     async def _migrate_cold_to_hot(self, memory_id: uuid.UUID) -> MigrationResult:
         """Migrate a memory from cold to hot tier.

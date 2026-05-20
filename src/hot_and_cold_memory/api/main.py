@@ -162,7 +162,7 @@ async def lifespan(app: FastAPI):
     scheduler.stop()
 
     # Close storage connections
-    for name in ("vector_store", "metadata_store", "cache"):
+    for name in ("vector_store", "metadata_store", "document_store", "cache"):
         store = _services.get(name)
         if store and hasattr(store, "close"):
             try:

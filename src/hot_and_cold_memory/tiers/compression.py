@@ -143,7 +143,7 @@ Output a JSON array with one object per segment, in the same order:
     def _parse_json_response(self, text: str) -> dict:
         """Extract JSON from LLM response text (for non-OpenAI models)."""
         # Try to find JSON block
-        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        json_match = re.search(r'\{.*?\}', text, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group())

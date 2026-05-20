@@ -52,7 +52,6 @@ class TestDecayEngine:
         score = engine.compute_score(
             access_count=0,
             last_accessed=None,
-            created_at=now,
             cluster_score=0.0,
         )
         assert score >= 0.0
@@ -65,7 +64,6 @@ class TestDecayEngine:
         score = engine.compute_score(
             access_count=100,
             last_accessed=now,
-            created_at=now,
             cluster_score=50.0,
         )
         assert score > 0.5

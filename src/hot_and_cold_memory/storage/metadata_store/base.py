@@ -222,6 +222,11 @@ class BaseMetadataStore(ABC):
         pass
 
     @abstractmethod
+    async def create_access_logs_batch(self, logs: list[AccessLog]) -> None:
+        """Create multiple access log entries in a single transaction."""
+        pass
+
+    @abstractmethod
     async def create_migration_log(self, log: MigrationLog) -> None:
         """Create a migration log entry."""
         pass

@@ -77,16 +77,17 @@ class FrequencyTracker:
         # 4. Recalculate frequency scores
         await self._recalculate_scores(memory_ids, timestamp)
 
-        # 5. Log access for each memory
-        for memory_id in memory_ids:
-            await self.metadata_store.create_access_log(
-                AccessLog(
-                    memory_id=memory_id,
-                    query_cluster_id=cluster_id,
-                    query_text=query_text,
-                    retrieved_at=timestamp,
-                )
+        # 5. Batch log access
+        access_logs = [
+            AccessLog(
+                memory_id=memory_id,
+                query_cluster_id=cluster_id,
+                query_text=query_text,
+                retrieved_at=timestamp,
             )
+            for memory_id in memory_ids
+        ]
+        await self.metadata_store.create_access_logs_batch(access_logs)
 
         logger.debug(
             "access_recorded",
@@ -254,7 +255,6 @@ class FrequencyTracker:
             new_score = self.decay_engine.compute_score(
                 access_count=metadata.access_count,
                 last_accessed=metadata.last_accessed_at,
-                created_at=metadata.created_at,
                 cluster_score=cluster_score,
             )
             batch_updates[memory_id] = {

@@ -441,6 +441,25 @@ class PostgresMetadataStore(BaseMetadataStore):
             session.add(model)
             await session.commit()
 
+    async def create_access_logs_batch(self, logs: list[AccessLog]) -> None:
+        """Create multiple access log entries in a single transaction."""
+        if not logs:
+            return
+        async with self.async_session() as session:
+            models = [
+                AccessLogModel(
+                    memory_id=_to_uuid_str(log.memory_id),
+                    query_cluster_id=_to_uuid_str(log.query_cluster_id) if log.query_cluster_id else None,
+                    query_text=log.query_text,
+                    retrieved_at=log.retrieved_at,
+                    response_time_ms=log.response_time_ms,
+                    tier_accessed=log.tier_accessed,
+                )
+                for log in logs
+            ]
+            session.add_all(models)
+            await session.commit()
+
     async def create_migration_log(self, log: MigrationLog) -> None:
         """Create a migration log entry."""
         async with self.async_session() as session:

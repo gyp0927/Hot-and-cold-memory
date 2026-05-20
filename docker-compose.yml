@@ -24,11 +24,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=rag
-      - POSTGRES_PASSWORD=rag_password
-      - POSTGRES_DB=adaptive_rag
+      - POSTGRES_USER=memory
+      - POSTGRES_PASSWORD=memory_password
+      - POSTGRES_DB=hot_and_cold_memory
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rag -d adaptive_rag"]
+      test: ["CMD-SHELL", "pg_isready -U memory -d hot_and_cold_memory"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,21 +53,21 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - APP_NAME=adaptive-rag
+      - APP_NAME=hot-and-cold-memory
       - DEBUG=false
       - LOG_LEVEL=INFO
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - VECTOR_DB_HOST=qdrant
       - VECTOR_DB_PORT=6333
-      - METADATA_DB_URL=postgresql+asyncpg://rag:rag_password@postgres:5432/adaptive_rag
+      - METADATA_DB_URL=postgresql+asyncpg://memory:memory_password@postgres:5432/hot_and_cold_memory
       - CACHE_URL=redis://redis:6379/0
-      - DOCUMENT_STORE_TYPE=local
       - DOCUMENT_STORE_PATH=/app/data/documents
       - LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com/v1}
       - LLM_API_KEY=${LLM_API_KEY}
       - COMPRESSION_MODEL=${COMPRESSION_MODEL:-gpt-4o-mini}
-      - DECOMPRESSION_MODEL=${DECOMPRESSION_MODEL:-gpt-4o}
+      - COMPRESSION_MAX_TOKENS=${COMPRESSION_MAX_TOKENS:-256}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-4096}
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
       - MIGRATION_INTERVAL_MINUTES=${MIGRATION_INTERVAL_MINUTES:-60}
@@ -75,6 +75,7 @@ services:
       - HOT_TIER_EVICT_PERCENT=${HOT_TIER_EVICT_PERCENT:-0.1}
       - MAX_UPLOAD_SIZE_BYTES=${MAX_UPLOAD_SIZE_BYTES:-52428800}
       - LLM_TIMEOUT_SECONDS=${LLM_TIMEOUT_SECONDS:-60}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-*}
     volumes:
       - document_store:/app/data/documents
     depends_on:

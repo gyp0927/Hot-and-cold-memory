@@ -70,6 +70,8 @@ async def list_memories(
     limit: int = 100,
     offset: int = 0,
 ) -> MemoryListResponse:
+    if limit > 1000:
+        limit = 1000
     """List memories with optional filtering."""
     if not _metadata_store:
         raise HTTPException(status_code=503, detail="Metadata store not initialized")

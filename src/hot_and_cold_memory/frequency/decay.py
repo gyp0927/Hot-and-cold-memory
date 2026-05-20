@@ -66,7 +66,6 @@ class DecayEngine:
         self,
         access_count: int,
         last_accessed: datetime | None,
-        created_at: datetime,
         cluster_score: float,
     ) -> float:
         """Compute composite frequency score.
