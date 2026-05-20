@@ -14,6 +14,7 @@ from hot_and_cold_memory.tiers.cold_tier import ColdTier
 from hot_and_cold_memory.tiers.hot_tier import HotTier
 
 from .embedder import Embedder
+from .importance_scorer import ImportanceScorer
 
 logger = get_logger(__name__)
 
@@ -66,6 +67,7 @@ class MemoryPipeline:
         self.hot_tier_capacity = self.settings.HOT_TIER_CAPACITY
         self.evict_percent = self.settings.HOT_TIER_EVICT_PERCENT
         self.migration_engine = migration_engine
+        self.importance_scorer = ImportanceScorer()
 
     async def write_memory(
         self,
@@ -118,6 +120,10 @@ class MemoryPipeline:
                 tags=tags or [],
             )
 
+            # Auto-score importance when user leaves the default
+            if importance == 0.5:
+                importance = await self.importance_scorer.score(content, memory_type)
+
             if is_hot:
                 # Store in hot tier (short-term memory)
                 await self.hot_tier.store_memories(
@@ -138,12 +144,11 @@ class MemoryPipeline:
                 )
                 tier = "cold"
 
-            # Update importance if specified
-            if importance != 0.5:
-                await self.metadata_store.update_memory(
-                    memory_id=memory_id,
-                    updates={"importance": importance, "attributes": attributes or {}},
-                )
+            # Persist importance and attributes
+            await self.metadata_store.update_memory(
+                memory_id=memory_id,
+                updates={"importance": importance, "attributes": attributes or {}},
+            )
 
             # Hot tier capacity check
             await self._enforce_hot_tier_capacity()
@@ -279,14 +284,27 @@ class MemoryPipeline:
                     initial_score=0.1,
                 )
 
-        # Update importances that differ from default
+        # Auto-score importance for defaults, then persist all importance values
         importance_updates: dict[uuid.UUID, dict[str, Any]] = {}
+        auto_score_items: list[tuple[uuid.UUID, str, str]] = []
         for _, entry, _, meta in hot_entries + cold_entries:
-            if meta["importance"] != 0.5:
+            if meta["importance"] == 0.5:
+                auto_score_items.append((entry.memory_id, entry.content, meta["memory_type"]))
+
+        if auto_score_items:
+            scored = await self.importance_scorer.score_batch(
+                [(content, mt) for _, content, mt in auto_score_items]
+            )
+            for (mid, _content, _mt), score in zip(auto_score_items, scored):
+                importance_updates[mid] = {"importance": score}
+
+        for _, entry, _, meta in hot_entries + cold_entries:
+            if entry.memory_id not in importance_updates:
                 importance_updates[entry.memory_id] = {
                     "importance": meta["importance"],
-                    "attributes": meta["attributes"],
                 }
+            importance_updates[entry.memory_id]["attributes"] = meta["attributes"]
+
         if importance_updates:
             await self.metadata_store.update_memories_batch(importance_updates)
 

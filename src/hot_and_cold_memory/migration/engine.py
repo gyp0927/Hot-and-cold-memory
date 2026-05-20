@@ -550,15 +550,24 @@ class MigrationEngine:
     async def _identify_hot_to_cold_candidates(self) -> list[uuid.UUID]:
         """Identify hot chunks with low frequency for demotion.
 
+        High-importance memories are protected by a stricter effective
+        threshold via ``should_demote``.
+
         Returns:
             List of memory IDs to demote.
         """
+        # Pull a slightly wider net so importance-protected memories that
+        # sit just above the raw threshold are still evaluated correctly.
         chunks = await self.metadata_store.query_memories_by_tier_and_score(
             tier=Tier.HOT,
-            max_score=self.policy.thresholds.hot_to_cold,
-            limit=self.policy.thresholds.batch_size,
+            max_score=self.policy.thresholds.hot_to_cold + 0.1,
+            limit=self.policy.thresholds.batch_size * 2,
         )
-        return [c.memory_id for c in chunks]
+        candidates = []
+        for c in chunks:
+            if self.policy.should_demote(c.frequency_score, c.importance):
+                candidates.append(c.memory_id)
+        return candidates[: self.policy.thresholds.batch_size]
 
     async def _identify_cold_to_hot_candidates(self) -> list[uuid.UUID]:
         """Identify cold chunks with high frequency or access count for promotion.

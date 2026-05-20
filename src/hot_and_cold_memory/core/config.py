@@ -134,6 +134,11 @@ class Settings(BaseSettings):
     METRICS_PORT: int = 9090
     ENABLE_TRACING: bool = True
 
+    # Auto-importance scoring
+    ENABLE_AUTO_IMPORTANCE: bool = True
+    AUTO_IMPORTANCE_USE_LLM: bool = False
+    AUTO_IMPORTANCE_LLM_THRESHOLD: float = 0.25
+
 
 # Global settings instance
 _settings: Settings | None = None

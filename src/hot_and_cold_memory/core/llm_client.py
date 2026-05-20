@@ -61,6 +61,32 @@ class LLMClient:
             )
         return self._anthropic_client
 
+    def complete_sync(
+        self,
+        prompt: str,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        response_format: dict[str, Any] | None = None,
+    ) -> str:
+        """Synchronous wrapper for completion (runs async call in a new event loop).
+
+        Intended for callers that are not inside an async context, such as
+        importance scoring during synchronous setup code.
+        """
+        import asyncio
+        try:
+            return asyncio.run(self.complete(prompt, model, max_tokens, temperature, response_format))
+        except RuntimeError:
+            # Already inside an event loop — fall back to thread-based execution
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(
+                    asyncio.run,
+                    self.complete(prompt, model, max_tokens, temperature, response_format),
+                )
+                return future.result()
+
     async def complete(
         self,
         prompt: str,
