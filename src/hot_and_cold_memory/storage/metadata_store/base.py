@@ -30,6 +30,8 @@ class MemoryItem:
     tags: list[str] = field(default_factory=list)
     attributes: dict[str, Any] = field(default_factory=dict)
     vector_id: str | None = None
+    compressed: bool = False
+    expires_at: datetime | None = None
 
 
 @dataclass
@@ -154,6 +156,27 @@ class BaseMetadataStore(ABC):
         order_desc: bool = False,
     ) -> list[MemoryItem]:
         """Query memories by tier and frequency score range."""
+        pass
+
+    @abstractmethod
+    async def query_forgettable_memories(
+        self,
+        tier: Tier,
+        max_importance: float,
+        cutoff: datetime,
+        limit: int = 100,
+    ) -> list[MemoryItem]:
+        """Query memories eligible for deletion (forgetting).
+
+        Args:
+            tier: Tier to query.
+            max_importance: Importance must be below this threshold.
+            cutoff: last_accessed_at must be older than this (or None).
+            limit: Max results.
+
+        Returns:
+            List of memory items eligible for forgetting.
+        """
         pass
 
     @abstractmethod

@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     DateTime,
     Float,
@@ -75,6 +76,12 @@ class MemoryModel(Base):
     )
 
     compression_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    compressed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, index=True
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     attributes: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     vector_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

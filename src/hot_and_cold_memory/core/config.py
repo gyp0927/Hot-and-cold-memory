@@ -139,6 +139,12 @@ class Settings(BaseSettings):
     AUTO_IMPORTANCE_USE_LLM: bool = False
     AUTO_IMPORTANCE_LLM_THRESHOLD: float = 0.25
 
+    # Forgetting
+    ENABLE_FORGETTING: bool = True
+    FORGET_MIN_IMPORTANCE: float = 0.2
+    FORGET_MIN_DAYS_SINCE_ACCESS: int = 30
+    FORGET_BATCH_SIZE: int = 100
+
 
 # Global settings instance
 _settings: Settings | None = None

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import and_, case, delete, func, select, update
+from sqlalchemy import and_, case, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from hot_and_cold_memory.core.config import Tier, get_settings
@@ -53,6 +53,8 @@ def _memory_to_item(model: MemoryModel) -> MemoryItem:
         tags=list(model.tags) if model.tags else [],
         attributes=dict(model.attributes) if model.attributes else {},
         vector_id=model.vector_id,
+        compressed=bool(model.compressed),
+        expires_at=model.expires_at,
     )
 
 
@@ -132,6 +134,8 @@ class PostgresMetadataStore(BaseMetadataStore):
                 tags=metadata.tags,
                 attributes=metadata.attributes,
                 vector_id=metadata.vector_id,
+                compressed=metadata.compressed,
+                expires_at=metadata.expires_at,
             )
             session.add(model)
             await session.commit()
@@ -181,6 +185,8 @@ class PostgresMetadataStore(BaseMetadataStore):
                     tags=m.tags,
                     attributes=m.attributes,
                     vector_id=m.vector_id,
+                    compressed=m.compressed,
+                    expires_at=m.expires_at,
                 )
                 for m in metadatas
             ]
@@ -328,6 +334,40 @@ class PostgresMetadataStore(BaseMetadataStore):
             else:
                 stmt = stmt.order_by(MemoryModel.frequency_score)
 
+            result = await session.execute(stmt)
+            models = result.scalars().all()
+            return [_memory_to_item(m) for m in models]
+
+    async def query_forgettable_memories(
+        self,
+        tier: Tier,
+        max_importance: float,
+        cutoff: datetime,
+        limit: int = 100,
+    ) -> list[MemoryItem]:
+        """Query memories eligible for deletion (forgetting)."""
+        async with self.async_session() as session:
+            conditions = [
+                MemoryModel.tier == tier.value,
+                MemoryModel.importance < max_importance,
+                MemoryModel.compressed.is_(True),
+            ]
+            # Either never accessed (created_at < cutoff) or last_accessed_at < cutoff
+            conditions.append(
+                or_(
+                    and_(
+                        MemoryModel.last_accessed_at.is_(None),
+                        MemoryModel.created_at < cutoff,
+                    ),
+                    MemoryModel.last_accessed_at < cutoff,
+                )
+            )
+
+            stmt = (
+                select(MemoryModel)
+                .where(and_(*conditions))
+                .limit(limit)
+            )
             result = await session.execute(stmt)
             models = result.scalars().all()
             return [_memory_to_item(m) for m in models]

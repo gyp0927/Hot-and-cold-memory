@@ -46,6 +46,7 @@ class MigrationReport:
     completed_at: datetime | None = None
     hot_to_cold: list[MigrationResult] = field(default_factory=list)
     cold_to_hot: list[MigrationResult] = field(default_factory=list)
+    forgotten: list[uuid.UUID] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     total_processed: int = 0
     skipped_off_peak: bool = False
@@ -165,6 +166,9 @@ class MigrationEngine:
                 else:
                     report.cold_to_hot.append(result)
 
+            # Phase 4: Forget cold memories that are too old and unimportant
+            report.forgotten = await self._forget_cold_memories()
+
         report.completed_at = datetime.now(timezone.utc)
         report.total_processed = len(report.hot_to_cold) + len(report.cold_to_hot)
 
@@ -178,6 +182,7 @@ class MigrationEngine:
             "migration_cycle_complete",
             hot_to_cold=len(report.hot_to_cold),
             cold_to_hot=len(report.cold_to_hot),
+            forgotten=len(report.forgotten),
             errors=len(report.errors),
             skipped_off_peak=report.skipped_off_peak,
             duration_seconds=(report.completed_at - report.started_at).total_seconds(),
@@ -312,6 +317,13 @@ class MigrationEngine:
             from hot_and_cold_memory.storage.metadata_store.base import MemoryItem
             now = datetime.now(timezone.utc)
             original_meta = await self.metadata_store.get_memory(record.memory_id)
+            # Compute expiration for low-importance memories
+            importance = original_meta.importance if original_meta else 0.5
+            expires_at = None
+            if importance < self.settings.FORGET_MIN_IMPORTANCE:
+                from datetime import timedelta
+                expires_at = now + timedelta(days=self.settings.FORGET_MIN_DAYS_SINCE_ACCESS)
+
             await self.metadata_store.create_memory(MemoryItem(
                 memory_id=record.memory_id,
                 tier=Tier.COLD,
@@ -319,7 +331,7 @@ class MigrationEngine:
                 original_length=len(record.content),
                 memory_type=original_meta.memory_type if original_meta else (record.memory_type or "observation"),
                 source=original_meta.source if original_meta else None,
-                importance=original_meta.importance if original_meta else 0.5,
+                importance=importance,
                 access_count=record.access_count,
                 frequency_score=record.frequency_score,
                 created_at=original_meta.created_at if original_meta else now,
@@ -329,6 +341,8 @@ class MigrationEngine:
                 topic_cluster_id=original_meta.topic_cluster_id if original_meta else None,
                 tags=record.metadata.get("tags", []) if record.metadata else [],
                 attributes=original_meta.attributes if original_meta else {},
+                compressed=True,
+                expires_at=expires_at,
             ))
 
             # 4. Remove from hot tier (vector, document, and metadata all deleted atomically)
@@ -471,6 +485,47 @@ class MigrationEngine:
             percent=percent,
         )
         return await self._migrate_hot_to_cold_batch(ids_to_evict)
+
+    async def _forget_cold_memories(self) -> list[uuid.UUID]:
+        """Delete cold memories that meet forgetting criteria.
+
+        Criteria:
+          - tier = COLD
+          - compressed = True
+          - importance < FORGET_MIN_IMPORTANCE
+          - last_accessed_at older than FORGET_MIN_DAYS_SINCE_ACCESS
+            (or never accessed and created_at is old enough)
+
+        Returns:
+            List of memory IDs that were deleted.
+        """
+        if not self.settings.ENABLE_FORGETTING:
+            return []
+
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            days=self.settings.FORGET_MIN_DAYS_SINCE_ACCESS
+        )
+
+        forgettable = await self.metadata_store.query_forgettable_memories(
+            tier=Tier.COLD,
+            max_importance=self.settings.FORGET_MIN_IMPORTANCE,
+            cutoff=cutoff,
+            limit=self.settings.FORGET_BATCH_SIZE,
+        )
+        if not forgettable:
+            return []
+
+        ids_to_forget = [m.memory_id for m in forgettable]
+        await self.cold_tier.delete(ids_to_forget)
+        deleted_count = await self.metadata_store.delete_memories(ids_to_forget)
+
+        logger.warning(
+            "cold_memories_forgotten",
+            count=deleted_count,
+            candidates=len(ids_to_forget),
+        )
+        return ids_to_forget
 
     async def _migrate_cold_to_hot(self, memory_id: uuid.UUID) -> MigrationResult:
         """Migrate a memory from cold to hot tier.
