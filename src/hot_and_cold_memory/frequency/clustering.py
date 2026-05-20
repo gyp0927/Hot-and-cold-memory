@@ -2,7 +2,7 @@
 
 import asyncio
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from hot_and_cold_memory.core.config import get_settings
@@ -271,7 +271,7 @@ class TopicClusterStore:
         all_clusters = await self.metadata_store.get_all_clusters()
         deleted = 0
         split = 0
-        stale_cutoff = datetime.utcnow() - timedelta(days=self.STALE_DAYS)
+        stale_cutoff = datetime.now(timezone.utc) - timedelta(days=self.STALE_DAYS)
 
         for cluster in all_clusters:
             last_active = cluster.last_accessed_at or cluster.created_at
@@ -355,7 +355,7 @@ class TopicClusterStore:
                 access_count=max(1, cluster.access_count // n_sub),
                 frequency_score=cluster.frequency_score,
                 member_count=sub_count,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 last_accessed_at=cluster.last_accessed_at,
             )
             await self.create_cluster(sub_cluster)

@@ -81,3 +81,8 @@ class BaseVectorStore(ABC):
     async def count(self, collection: str) -> int:
         """Count vectors in collection."""
         pass
+
+    @abstractmethod
+    async def close(self) -> None:
+        """Close store connections."""
+        pass

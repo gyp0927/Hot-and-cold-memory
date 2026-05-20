@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from hot_and_cold_memory.core.config import get_settings
@@ -57,7 +57,7 @@ class FrequencyTracker:
             query_text: Original query text.
             query_embedding: Pre-computed query embedding (optional).
         """
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
 
         # 1. Get or create query cluster
         cluster_id = await self._get_or_create_cluster(
@@ -205,7 +205,7 @@ class FrequencyTracker:
             access_count=0,
             frequency_score=0.0,
             member_count=1,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             last_accessed_at=None,
         )
         await self.cluster_store.create_cluster(new_cluster)

@@ -1,6 +1,6 @@
 """Migration scheduler using APScheduler."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -65,4 +65,4 @@ class MigrationScheduler:
     async def trigger_now(self) -> None:
         """Trigger migration immediately."""
         if self._migration_job:
-            self._migration_job.modify(next_run_time=datetime.utcnow())
+            self._migration_job.modify(next_run_time=datetime.now(timezone.utc))

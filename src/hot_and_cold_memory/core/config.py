@@ -80,8 +80,11 @@ class Settings(BaseSettings):
     LOCAL_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     LOCAL_EMBEDDING_DEVICE: str = "cpu"  # "cpu" or "cuda"
 
-    # Metadata Database
-    METADATA_DB_URL: str = "postgresql+asyncpg://memory:memory_password@localhost:5432/hot_and_cold_memory"
+    # Metadata Database (no default credentials — must be provided via env)
+    METADATA_DB_URL: str = Field(
+        default="postgresql+asyncpg://memory:memory_password@localhost:5432/hot_and_cold_memory",
+        repr=False,
+    )
 
     # Cache
     CACHE_URL: str | None = None
@@ -112,10 +115,13 @@ class Settings(BaseSettings):
     MIGRATION_INTERVAL_MINUTES: int = 60
     MIGRATION_MAX_CONCURRENT: int = 5
 
+    # CORS
+    CORS_ALLOW_ORIGINS: str = "*"  # Comma-separated list; "*" for dev only
+
     # LLM
     # 兼容 OpenAI 格式的任意服务商（OpenAI/DeepSeek/通义千问/Kimi等）
     LLM_BASE_URL: str = "https://api.openai.com/v1"
-    LLM_API_KEY: str = Field(default="", repr=False)
+    LLM_API_KEY: str = Field(..., repr=False)  # Required: no default to avoid runtime failures
     LLM_MAX_TOKENS: int = 4096
     LLM_TEMPERATURE: float = 0.0
     LLM_TIMEOUT_SECONDS: float = 60.0

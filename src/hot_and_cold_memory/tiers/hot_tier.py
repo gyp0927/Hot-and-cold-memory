@@ -1,7 +1,7 @@
 """Hot tier (short-term memory): stores full original content with embeddings."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from hot_and_cold_memory.core.config import Tier, get_settings
@@ -88,7 +88,7 @@ class HotTier(BaseTier):
         )
 
         # 3. Store metadata (new memories start with max frequency)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         metadata_list = [
             MemoryItem(
                 memory_id=memory.memory_id,
@@ -166,6 +166,14 @@ class HotTier(BaseTier):
                 memory_type=meta.memory_type if meta else "observation",
                 metadata=result.payload or {},
             ))
+
+        # Track access for frequency scoring (defensive: also recorded by router)
+        if memory_ids:
+            await self.metadata_store.increment_access(
+                memory_ids=memory_ids,
+                cluster_id=None,
+                timestamp=datetime.now(timezone.utc),
+            )
 
         return memories
 

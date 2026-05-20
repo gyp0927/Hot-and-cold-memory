@@ -209,6 +209,12 @@ class LocalQdrantStore(BaseVectorStore):
         result = await asyncio.to_thread(self.client.count, collection_name=collection)
         return result.count
 
+    async def close(self) -> None:
+        """Close Qdrant client."""
+        if self.client:
+            await asyncio.to_thread(self.client.close)
+            self.client = None
+
     async def search_batch(
         self,
         collection: str,

@@ -2,11 +2,13 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
 
 from hot_and_cold_memory.core.config import get_settings
+from hot_and_cold_memory.core.exceptions import AdaptiveMemoryError
 from hot_and_cold_memory.core.logging import get_logger, setup_logging
 from hot_and_cold_memory.frequency.tracker import FrequencyTracker
 from hot_and_cold_memory.ingestion.embedder import Embedder
@@ -158,6 +160,17 @@ async def lifespan(app: FastAPI):
 
     # Graceful shutdown
     scheduler.stop()
+
+    # Close storage connections
+    for name in ("vector_store", "metadata_store", "cache"):
+        store = _services.get(name)
+        if store and hasattr(store, "close"):
+            try:
+                await store.close()
+                logger.info("store_closed", name=name)
+            except Exception as e:
+                logger.warning("store_close_failed", name=name, error=str(e))
+
     logger.info("shutting_down")
 
 
@@ -172,13 +185,18 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS
+    # CORS (restrict in production via CORS_ALLOW_ORIGINS env var)
+    origins = (
+        [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+        if settings.CORS_ALLOW_ORIGINS != "*"
+        else ["*"]
+    )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=origins,
         allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["Content-Type", "Authorization"],
     )
 
     # Register routers
@@ -194,6 +212,15 @@ def create_app() -> FastAPI:
     @app.get("/")
     async def root():
         return {"message": "Adaptive Memory API", "version": "0.1.0"}
+
+    # Global exception handler for custom exception hierarchy
+    @app.exception_handler(AdaptiveMemoryError)
+    async def handle_adaptive_memory_error(request: Request, exc: AdaptiveMemoryError) -> JSONResponse:
+        logger.error("adaptive_memory_error", error=str(exc), path=request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
 
     return app
 

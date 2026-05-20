@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from hot_and_cold_memory.core.config import Tier, get_settings
@@ -89,7 +89,7 @@ class MemoryPipeline:
         Returns:
             Memory write result.
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         memory_id = uuid.uuid4()
 
         try:
@@ -148,7 +148,7 @@ class MemoryPipeline:
             # Hot tier capacity check
             await self._enforce_hot_tier_capacity()
 
-            elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+            elapsed = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             # Update Prometheus gauges
             hot_total = await self.metadata_store.count_memories_by_tier(Tier.HOT)
@@ -185,6 +185,8 @@ class MemoryPipeline:
     ) -> list[MemoryWriteResult]:
         """Write multiple memories in batch.
 
+        Batches embedding generation and tier storage for efficiency.
+
         Args:
             items: List of memory dicts with keys: content, memory_type, source,
                    importance, tags, attributes.
@@ -192,18 +194,141 @@ class MemoryPipeline:
         Returns:
             List of write results.
         """
-        results = []
-        for item in items:
-            result = await self.write_memory(
-                content=item["content"],
-                memory_type=item.get("memory_type", "observation"),
-                source=item.get("source"),
-                importance=item.get("importance", 0.5),
-                tags=item.get("tags"),
-                attributes=item.get("attributes"),
+        if not items:
+            return []
+
+        start_time = datetime.now(timezone.utc)
+        from hot_and_cold_memory.tiers.base import MemoryEntry
+
+        # Pre-validate and assign IDs
+        results: list[MemoryWriteResult] = []
+        valid_items: list[tuple[int, dict[str, Any], uuid.UUID]] = []
+        for i, item in enumerate(items):
+            mid = uuid.uuid4()
+            content = item.get("content", "")
+            if not content or not content.strip():
+                results.append(
+                    MemoryWriteResult(
+                        memory_id=mid,
+                        status="failed",
+                        error="Memory content is empty",
+                    )
+                )
+            else:
+                valid_items.append((i, item, mid))
+
+        if not valid_items:
+            return results
+
+        # Batch generate embeddings
+        contents = [item["content"] for _, item, _ in valid_items]
+        embeddings = await self.embedder.embed_batch(contents)
+
+        # Check topic frequencies in batch
+        topic_infos = await self.frequency_tracker.get_topic_frequencies_batch(embeddings)
+
+        hot_entries: list[tuple[uuid.UUID, MemoryEntry, list[float], dict[str, Any]]] = []
+        cold_entries: list[tuple[uuid.UUID, MemoryEntry, list[float], dict[str, Any]]] = []
+
+        for (orig_idx, item, mid), embedding, topic_info in zip(
+            valid_items, embeddings, topic_infos
+        ):
+            is_hot = (
+                topic_info.frequency >= self.HOT_TOPIC_THRESHOLD
+                or topic_info.access_count >= self.settings.HOT_ACCESS_COUNT_THRESHOLD
             )
-            results.append(result)
-        return results
+            entry = MemoryEntry(
+                memory_id=mid,
+                content=item["content"],
+                tags=item.get("tags") or [],
+            )
+            meta = {
+                "memory_type": item.get("memory_type", "observation"),
+                "source": item.get("source"),
+                "importance": item.get("importance", 0.5),
+                "attributes": item.get("attributes") or {},
+            }
+            if is_hot:
+                hot_entries.append((orig_idx, entry, embedding, meta))
+            else:
+                cold_entries.append((orig_idx, entry, embedding, meta))
+
+        # Batch store hot
+        if hot_entries:
+            await self.hot_tier.store_memories(
+                memories=[e for _, e, _, _ in hot_entries],
+                embeddings=[emb for _, _, emb, _ in hot_entries],
+                memory_type=hot_entries[0][3]["memory_type"],
+                source=hot_entries[0][3]["source"],
+            )
+        # Batch store cold
+        if cold_entries:
+            await self.cold_tier.store_raw_memories(
+                memories=[e for _, e, _, _ in cold_entries],
+                embeddings=[emb for _, _, emb, _ in cold_entries],
+                memory_type=cold_entries[0][3]["memory_type"],
+                source=cold_entries[0][3]["source"],
+                initial_score=0.1,
+            )
+
+        # Update importances that differ from default
+        importance_updates: dict[uuid.UUID, dict[str, Any]] = {}
+        for _, entry, _, meta in hot_entries + cold_entries:
+            if meta["importance"] != 0.5:
+                importance_updates[entry.memory_id] = {
+                    "importance": meta["importance"],
+                    "attributes": meta["attributes"],
+                }
+        if importance_updates:
+            await self.metadata_store.update_memories_batch(importance_updates)
+
+        # Build results
+        result_map: dict[int, MemoryWriteResult] = {}
+        for orig_idx, entry, _, _meta in hot_entries:
+            result_map[orig_idx] = MemoryWriteResult(
+                memory_id=entry.memory_id,
+                status="success",
+                tier="hot",
+            )
+        for orig_idx, entry, _, _meta in cold_entries:
+            result_map[orig_idx] = MemoryWriteResult(
+                memory_id=entry.memory_id,
+                status="success",
+                tier="cold",
+            )
+
+        # Insert results at correct positions
+        for orig_idx, _, mid in valid_items:
+            if orig_idx not in result_map:
+                result_map[orig_idx] = MemoryWriteResult(
+                    memory_id=mid,
+                    status="failed",
+                    error="Unknown batch error",
+                )
+
+        final_results = [result_map[i] for i, _ in enumerate(items)]
+
+        # Hot tier capacity check
+        await self._enforce_hot_tier_capacity()
+
+        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+        for r in final_results:
+            r.processing_time_ms = elapsed / max(len(items), 1)
+
+        # Update metrics
+        hot_total = await self.metadata_store.count_memories_by_tier(Tier.HOT)
+        cold_total = await self.metadata_store.count_memories_by_tier(Tier.COLD)
+        MEMORIES_TOTAL.labels(tier="hot").set(hot_total)
+        MEMORIES_TOTAL.labels(tier="cold").set(cold_total)
+
+        logger.info(
+            "memory_batch_written",
+            count=len(valid_items),
+            hot=len(hot_entries),
+            cold=len(cold_entries),
+            elapsed_ms=elapsed,
+        )
+        return final_results
 
     async def delete_memory(self, memory_id: uuid.UUID) -> bool:
         """Delete a memory from all stores.

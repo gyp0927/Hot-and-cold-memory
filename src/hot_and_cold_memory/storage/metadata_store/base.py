@@ -3,7 +3,7 @@
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from hot_and_cold_memory.core.config import Tier
@@ -22,8 +22,8 @@ class MemoryItem:
     importance: float = 0.5
     access_count: int = 0
     frequency_score: float = 0.0
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_accessed_at: datetime | None = None
     last_migrated_at: datetime | None = None
     topic_cluster_id: uuid.UUID | None = None
@@ -42,7 +42,7 @@ class TopicCluster:
     access_count: int = 0
     frequency_score: float = 0.0
     member_count: int = 1
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_accessed_at: datetime | None = None
 
 
@@ -54,7 +54,7 @@ class AccessLog:
     log_id: int | None = None
     query_cluster_id: uuid.UUID | None = None
     query_text: str | None = None
-    retrieved_at: datetime = field(default_factory=datetime.utcnow)
+    retrieved_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     response_time_ms: int | None = None
     tier_accessed: str | None = None
 
@@ -69,7 +69,7 @@ class MigrationLog:
     new_size: int
     log_id: int | None = None
     compression_ratio: float | None = None
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: datetime | None = None
     status: str = "pending"
     error_message: str | None = None
@@ -233,4 +233,9 @@ class BaseMetadataStore(ABC):
         updates: dict[str, Any],
     ) -> None:
         """Update migration log."""
+        pass
+
+    @abstractmethod
+    async def close(self) -> None:
+        """Close store connections."""
         pass

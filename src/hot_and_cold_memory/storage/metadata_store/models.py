@@ -6,12 +6,15 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
+    func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -26,6 +29,13 @@ class MemoryModel(Base):
     """Memory item metadata table."""
 
     __tablename__ = "memories"
+
+    __table_args__ = (
+        CheckConstraint("tier IN ('hot', 'cold')", name="ck_memory_tier"),
+        Index("ix_memories_created_at", "created_at"),
+        Index("ix_memories_updated_at", "updated_at"),
+        Index("ix_memories_source_memory_type", "source", "memory_type"),
+    )
 
     memory_id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -47,10 +57,10 @@ class MemoryModel(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow
+        DateTime, nullable=False, default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, nullable=False, default=func.now(), onupdate=func.now()
     )
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_migrated_at: Mapped[datetime | None] = mapped_column(
@@ -58,7 +68,10 @@ class MemoryModel(Base):
     )
 
     topic_cluster_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("topic_clusters.cluster_id"), nullable=True, index=True
+        String(36),
+        ForeignKey("topic_clusters.cluster_id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     compression_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
@@ -80,7 +93,7 @@ class TopicClusterModel(Base):
     frequency_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     member_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow
+        DateTime, nullable=False, default=func.now()
     )
     last_accessed_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
@@ -95,14 +108,14 @@ class AccessLogModel(Base):
 
     log_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     memory_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("memories.memory_id"), nullable=False
+        String(36), ForeignKey("memories.memory_id", ondelete="CASCADE"), nullable=False
     )
     query_cluster_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("topic_clusters.cluster_id"), nullable=True
+        String(36), ForeignKey("topic_clusters.cluster_id", ondelete="SET NULL"), nullable=True
     )
     query_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     retrieved_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow
+        DateTime, nullable=False, default=func.now()
     )
     response_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tier_accessed: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -115,14 +128,14 @@ class MigrationLogModel(Base):
 
     log_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     memory_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("memories.memory_id"), nullable=False
+        String(36), ForeignKey("memories.memory_id", ondelete="CASCADE"), nullable=False
     )
     direction: Mapped[str] = mapped_column(String(20), nullable=False)
     original_size: Mapped[int] = mapped_column(Integer, nullable=False)
     new_size: Mapped[int] = mapped_column(Integer, nullable=False)
     compression_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
     started_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow
+        DateTime, nullable=False, default=func.now()
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")

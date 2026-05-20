@@ -1,7 +1,7 @@
 """Unit tests for frequency tracking."""
 
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from hot_and_cold_memory.frequency.decay import DecayEngine
 
@@ -22,7 +22,7 @@ class TestDecayEngine:
     def test_apply_decay_recent_access(self):
         """Recent access should have minimal decay."""
         engine = DecayEngine()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         score = engine.apply_decay(
             base_score=1.0,
             last_accessed=now,
@@ -34,7 +34,7 @@ class TestDecayEngine:
     def test_apply_decay_old_access(self):
         """Old access should decay significantly."""
         engine = DecayEngine()
-        old_time = datetime.utcnow() - timedelta(hours=48)
+        old_time = datetime.now(timezone.utc) - timedelta(hours=48)
         score = engine.apply_decay(
             base_score=1.0,
             last_accessed=old_time,
@@ -48,7 +48,7 @@ class TestDecayEngine:
     def test_compute_score_new_chunk(self):
         """New chunk with no accesses should have low score."""
         engine = DecayEngine()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         score = engine.compute_score(
             access_count=0,
             last_accessed=None,
@@ -61,7 +61,7 @@ class TestDecayEngine:
     def test_compute_score_popular_chunk(self):
         """Popular chunk should have high score."""
         engine = DecayEngine()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         score = engine.compute_score(
             access_count=100,
             last_accessed=now,

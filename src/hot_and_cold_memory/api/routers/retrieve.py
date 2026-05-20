@@ -62,6 +62,8 @@ async def retrieve(request: RetrieveRequest) -> RetrieveResponse:
             topic_frequency=result.topic_frequency,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("retrieve_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal retrieval error") from e

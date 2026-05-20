@@ -1,7 +1,7 @@
 """Cold tier (long-term memory): stores compressed summaries with summary embeddings."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from hot_and_cold_memory.core.config import Tier, get_settings
@@ -101,7 +101,7 @@ class ColdTier(BaseTier):
         )
 
         # 5. Store metadata
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         metadata_list = [
             MemoryItem(
                 memory_id=memory.memory_id,
@@ -176,7 +176,7 @@ class ColdTier(BaseTier):
         )
 
         # 3. Store metadata
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         metadata_list = [
             MemoryItem(
                 memory_id=memory.memory_id,
@@ -257,8 +257,8 @@ class ColdTier(BaseTier):
                 try:
                     text = await self.decompression_engine.decompress(text)
                     is_decompressed = True
-                except Exception:
-                    logger.warning("decompress_failed", memory_id=str(memory_id))
+                except Exception as exc:
+                    logger.warning("decompress_failed", memory_id=str(memory_id), error=str(exc))
 
             memories.append(RetrievedMemory(
                 memory_id=memory_id,
@@ -271,6 +271,14 @@ class ColdTier(BaseTier):
                 memory_type=meta.memory_type if meta else "observation",
                 metadata=result.payload or {},
             ))
+
+        # Track access for frequency scoring (defensive: also recorded by router)
+        if memory_ids:
+            await self.metadata_store.increment_access(
+                memory_ids=memory_ids,
+                cluster_id=None,
+                timestamp=datetime.now(timezone.utc),
+            )
 
         return memories
 

@@ -20,8 +20,13 @@ class _LRUCache:
         self._cache: OrderedDict[str, list[float]] = OrderedDict()
         self._lock = asyncio.Lock()
 
+    @staticmethod
+    def _normalize(text: str) -> str:
+        """Normalize text for consistent cache keys."""
+        return " ".join(text.lower().split())
+
     def _key(self, text: str) -> str:
-        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+        return hashlib.sha256(self._normalize(text).encode("utf-8")).hexdigest()
 
     async def get(self, text: str) -> list[float] | None:
         async with self._lock:
@@ -39,20 +44,24 @@ class _LRUCache:
             while len(self._cache) > self.maxsize:
                 self._cache.popitem(last=False)
 
-    async def get_batch(self, texts: list[str]) -> tuple[list[int], list[str]]:
-        """Return (cached_indices, missing_texts) for a batch.
+    async def get_batch(
+        self, texts: list[str]
+    ) -> tuple[dict[int, list[float]], list[str], list[int]]:
+        """Return cached vectors and missing texts for a batch.
 
-        cached_indices maps the original index to the cached vector.
+        Returns:
+            Tuple of (cached_map, missing_texts, missing_indices).
+            cached_map: dict of original_index -> vector for cached items.
         """
         async with self._lock:
-            cached: list[int] = []
+            cached: dict[int, list[float]] = {}
             missing: list[str] = []
             missing_indices: list[int] = []
             for i, text in enumerate(texts):
                 key = self._key(text)
                 if key in self._cache:
                     self._cache.move_to_end(key)
-                    cached.append(i)
+                    cached[i] = list(self._cache[key])
                 else:
                     missing.append(text)
                     missing_indices.append(i)
@@ -104,11 +113,11 @@ class Embedder:
         if self._local_model is None:
             try:
                 from sentence_transformers import SentenceTransformer
-            except ImportError:
+            except ImportError as exc:
                 raise IngestionError(
                     "sentence-transformers not installed. "
                     "Run: pip install sentence-transformers"
-                )
+                ) from exc
 
             logger.info(
                 "loading_local_embedding_model",
@@ -168,12 +177,12 @@ class Embedder:
         non_empty_texts = [texts[i] for i in non_empty_indices]
 
         # Cache lookup for non-empty texts
-        cached_indices, missing_texts, missing_orig_indices = await self._cache.get_batch(non_empty_texts)
+        cached_map, missing_texts, missing_orig_indices = await self._cache.get_batch(non_empty_texts)
 
         # Build result for cached items
         cached_vectors: dict[int, list[float]] = {}
-        for orig_idx in cached_indices:
-            cached_vectors[non_empty_indices[orig_idx]] = await self._cache.get(non_empty_texts[orig_idx])
+        for orig_idx, vector in cached_map.items():
+            cached_vectors[non_empty_indices[orig_idx]] = vector
 
         # Compute missing embeddings
         if missing_texts:
