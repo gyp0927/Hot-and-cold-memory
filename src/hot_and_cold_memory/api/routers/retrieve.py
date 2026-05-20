@@ -54,7 +54,7 @@ async def retrieve(request: RetrieveRequest) -> RetrieveResponse:
                     frequency_score=c.frequency_score,
                     memory_type=c.memory_type,
                 )
-                for c in result.memories
+                for c in result.chunks
             ],
             routing_strategy=result.routing_strategy.value,
             hot_results_count=result.hot_results_count,
